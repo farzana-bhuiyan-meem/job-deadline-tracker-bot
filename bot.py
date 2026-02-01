@@ -39,6 +39,20 @@ DEFAULT_COMPANY = 'Unknown Company'
 DEFAULT_POSITION = 'Unknown Position'
 
 
+def _is_field_present(value, default_value):
+    """
+    Check if a field has a meaningful value.
+    
+    Args:
+        value: The field value to check
+        default_value: The default value for this field
+        
+    Returns:
+        True if field has a meaningful value, False otherwise
+    """
+    return value not in [None, default_value, '']
+
+
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command."""
     logger.info(f"User {update.effective_user.id} started the bot")
@@ -326,8 +340,8 @@ async def save_and_confirm_job(update: Update, context: ContextTypes.DEFAULT_TYP
     """
     # Check if critical fields are missing
     # Only require at least ONE of company or position (not both)
-    has_company = job_data.get('company') not in [None, DEFAULT_COMPANY, '']
-    has_position = job_data.get('position') not in [None, DEFAULT_POSITION, '']
+    has_company = _is_field_present(job_data.get('company'), DEFAULT_COMPANY)
+    has_position = _is_field_present(job_data.get('position'), DEFAULT_POSITION)
     
     # Track if we need to warn the user about missing critical fields
     warn_user_about_fields = False
@@ -413,7 +427,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Check if user wants to skip providing URL
         # Only check for exact matches to avoid false positives
-        message_lower = message_text.lower().strip()
+        message_lower = message_text.lower()
         wants_to_skip = message_lower in SKIP_URL_KEYWORDS
         
         if wants_to_skip:

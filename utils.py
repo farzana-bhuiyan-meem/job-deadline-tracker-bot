@@ -24,7 +24,8 @@ def _get_or_default(value, default):
     Returns:
         Original value or default
     """
-    if value is None or value == '':
+    # Explicitly check for None and empty string to avoid catching other falsy values
+    if value is None or (isinstance(value, str) and value == ''):
         return default
     return value
 
