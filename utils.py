@@ -8,6 +8,27 @@ from typing import Optional, Dict
 from urllib.parse import urlparse
 import config
 
+# Default values for missing job data
+DEFAULT_COMPANY = 'Unknown Company'
+DEFAULT_POSITION = 'Unknown Position'
+
+
+def _get_or_default(value, default):
+    """
+    Get value or return default if value is None or empty string.
+    
+    Args:
+        value: Value to check
+        default: Default value to return
+        
+    Returns:
+        Original value or default
+    """
+    # Explicitly check for None and empty string to avoid catching other falsy values
+    if value is None or (isinstance(value, str) and value == ''):
+        return default
+    return value
+
 
 def is_valid_url(url: str) -> bool:
     """
@@ -54,33 +75,45 @@ def format_job_message(job_data: Dict) -> str:
     Returns:
         Formatted message string
     """
-    message_parts = ["✓ Job Added Successfully!\n"]
+    # Get values - use helper function for proper default handling
+    company = _get_or_default(job_data.get('company'), DEFAULT_COMPANY)
+    position = _get_or_default(job_data.get('position'), DEFAULT_POSITION)
+    deadline = job_data.get('deadline')
+    salary = job_data.get('salary')
+    location = job_data.get('location')
+    url = job_data.get('url')
     
-    if job_data.get('company'):
-        message_parts.append(f"🏢 Company: {job_data['company']}")
+    # Build message
+    message = "✅ **Job Added Successfully!**\n\n"
     
-    if job_data.get('position'):
-        message_parts.append(f"💼 Position: {job_data['position']}")
+    message += f"🏢 **Company:** {company}\n"
+    message += f"💼 **Position:** {position}\n"
     
-    if job_data.get('deadline'):
-        deadline_str = job_data['deadline']
-        if isinstance(job_data['deadline'], datetime):
-            deadline_str = job_data['deadline'].strftime('%B %d, %Y')
-            days_left = calculate_days_left(job_data['deadline'])
-            message_parts.append(f"📅 Deadline: {deadline_str} ({days_left} days left)")
-        else:
-            message_parts.append(f"📅 Deadline: {deadline_str}")
+    if deadline:
+        # Use isinstance for proper type checking
+        deadline_str = deadline.strftime('%B %d, %Y') if isinstance(deadline, datetime) else str(deadline)
+        days_left = calculate_days_left(deadline) if isinstance(deadline, datetime) else None
+        message += f"📅 **Deadline:** {deadline_str}"
+        if days_left is not None:
+            message += f" ({days_left} days left)"
+        message += "\n"
+    else:
+        message += "📅 **Deadline:** Not specified\n"
     
-    if job_data.get('location'):
-        message_parts.append(f"📍 Location: {job_data['location']}")
+    if salary:
+        message += f"💰 **Salary:** {salary}\n"
     
-    if job_data.get('salary'):
-        message_parts.append(f"💰 Salary: {job_data['salary']}")
+    if location:
+        message += f"📍 **Location:** {location}\n"
     
-    message_parts.append("\n🔗 Link saved to your tracker")
-    message_parts.append("⏰ I'll remind you 3 days before deadline")
+    if url:
+        message += f"🔗 **Apply:** {url}\n"
+    else:
+        message += "⚠️ **Note:** No application link available\n"
     
-    return "\n".join(message_parts)
+    message += "\n✨ Saved to your Google Sheet!"
+    
+    return message
 
 
 def format_reminder_message(job_data: Dict, days_left: int) -> str:

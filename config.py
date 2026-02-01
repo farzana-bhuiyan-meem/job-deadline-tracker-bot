@@ -15,7 +15,7 @@ TELEGRAM_USER_ID = os.getenv('TELEGRAM_USER_ID')
 
 # Google Gemini API
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-GEMINI_MODEL = 'gemini-pro'
+GEMINI_MODEL = 'gemini-1.5-flash'
 
 # Jina AI Reader
 JINA_API_KEY = os.getenv('JINA_API_KEY', '')

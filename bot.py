@@ -30,6 +30,29 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Constants for user input matching
+# Keywords that indicate user wants to skip providing URL (exact match only for clarity)
+# Note: 'n' is included as a common shorthand, but requires exact match to avoid false positives
+SKIP_URL_KEYWORDS = ['no', 'skip', 'none', 'no link', 'nope', 'na', 'n/a', 'n']
+
+# Default values for missing job data
+DEFAULT_COMPANY = 'Unknown Company'
+DEFAULT_POSITION = 'Unknown Position'
+
+
+def _is_field_present(value, default_value):
+    """
+    Check if a field has a meaningful value.
+    
+    Args:
+        value: The field value to check
+        default_value: The default value for this field
+        
+    Returns:
+        True if field has a meaningful value, False otherwise
+    """
+    return value not in [None, default_value, '']
+
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command."""
@@ -227,10 +250,16 @@ async def process_job_url(update: Update, context: ContextTypes.DEFAULT_TYPE, ur
         # Check if scraping failed
         if not scrape_result['success']:
             logger.warning(f"Scraping failed for URL: {url}")
+            
+            # Store URL in context so we can use it when user sends text
+            context.user_data['pending_url'] = url
+            context.user_data['waiting_for_job_text'] = True
+            
             await processing_msg.edit_text(
                 f"⚠️ {scrape_result['error']}\n\n"
-                "💡 **Alternative:** Copy and paste the job description text, "
-                "and I'll extract the details for you!"
+                "💡 **No problem!** Please copy and paste the job description text, "
+                "and I'll extract the details while keeping this URL for applying later.\n\n"
+                "📋 Just send me the job posting text now."
             )
             return
         
@@ -271,7 +300,25 @@ async def process_job_text(update: Update, context: ContextTypes.DEFAULT_TYPE, t
         
         job_data = extractor.extract_job_details(text, url)
         
-        # Save and confirm
+        # If no URL was provided, ask the user for it
+        if not url:
+            logger.info("No URL provided with job text, asking user")
+            
+            # Store job data in context
+            context.user_data['pending_job_data'] = job_data
+            context.user_data['waiting_for_job_url'] = True
+            
+            await processing_msg.edit_text(
+                "✅ Job details extracted!\n\n"
+                "📎 Do you have the job posting URL/link?\n"
+                "This will help you apply to the job later.\n\n"
+                "Please send:\n"
+                "• The job URL/link, OR\n"
+                "• Reply 'no' or 'skip' if you don't have it"
+            )
+            return
+        
+        # URL was provided, save directly
         await save_and_confirm_job(update, context, job_data, processing_msg)
     
     except Exception as e:
@@ -293,21 +340,24 @@ async def save_and_confirm_job(update: Update, context: ContextTypes.DEFAULT_TYP
         processing_msg: Processing message to update
     """
     # Check if critical fields are missing
-    has_company = job_data.get('company') not in [None, 'Unknown Company', '']
-    has_position = job_data.get('position') not in [None, 'Unknown Position', '']
+    # Only require at least ONE of company or position (not both)
+    has_company = _is_field_present(job_data.get('company'), DEFAULT_COMPANY)
+    has_position = _is_field_present(job_data.get('position'), DEFAULT_POSITION)
     
-    if not has_company or not has_position:
-        logger.warning("Critical fields missing in extraction")
-        await processing_msg.edit_text(
-            "⚠️ I had trouble extracting some information.\n\n"
-            f"Company: {job_data.get('company', 'Not found')}\n"
-            f"Position: {job_data.get('position', 'Not found')}\n\n"
-            "The job has been added to your sheet, but you may need to update these fields manually."
-        )
+    # Track if we need to warn the user about missing critical fields
+    warn_user_about_fields = False
     
-    # Check if deadline was found
+    if not has_company and not has_position:
+        # Neither company nor position found - will warn user after saving
+        logger.warning("Both company and position missing in extraction")
+        warn_user_about_fields = True
+    elif not has_company or not has_position:
+        # Only one is missing - that's okay, just log it
+        logger.info(f"Missing: {'company' if not has_company else 'position'} (this is fine)")
+    
+    # Deadline is completely optional - don't mention it
     if not job_data.get('deadline'):
-        logger.info("No deadline found in extraction")
+        logger.info("No deadline found (this is normal and okay)")
     
     # Step 3: Save to Google Sheets
     logger.info("Saving to Google Sheet")
@@ -326,6 +376,11 @@ async def save_and_confirm_job(update: Update, context: ContextTypes.DEFAULT_TYP
     logger.info("Job processed successfully")
     
     confirmation_message = utils.format_job_message(job_data)
+    
+    # Add warning about missing fields if needed
+    if warn_user_about_fields:
+        sheet_text = "in your Google Sheet" if config.GOOGLE_SHEET_ID else "in your tracker"
+        confirmation_message += f"\n\n⚠️ **Note:** Company and position were not found. Please update '{DEFAULT_COMPANY}' and '{DEFAULT_POSITION}' {sheet_text}."
     
     # Create inline keyboard
     keyboard = []
@@ -346,6 +401,62 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if config.TELEGRAM_USER_ID and str(update.effective_user.id) != config.TELEGRAM_USER_ID:
         await update.message.reply_text("Sorry, this bot is private.")
         return
+    
+    # NEW: Check if we're waiting for job text after a failed URL scrape
+    if context.user_data.get('waiting_for_job_text'):
+        pending_url = context.user_data.get('pending_url')
+        message_text = update.message.text.strip()
+        
+        # Clear the waiting state
+        context.user_data['waiting_for_job_text'] = False
+        context.user_data['pending_url'] = None
+        
+        logger.info(f"Received job text for previously failed URL: {pending_url}")
+        
+        # Process the text with the saved URL
+        processing_msg = await update.message.reply_text("⏳ Processing job details from your text...")
+        await process_job_text(update, context, message_text, pending_url, processing_msg)
+        return
+    
+    # NEW: Check if we're waiting for URL after text extraction
+    if context.user_data.get('waiting_for_job_url'):
+        pending_job_data = context.user_data.get('pending_job_data')
+        message_text = update.message.text.strip()
+        
+        # Clear waiting state
+        context.user_data['waiting_for_job_url'] = False
+        context.user_data['pending_job_data'] = None
+        
+        # Check if user wants to skip providing URL
+        # Only check for exact matches to avoid false positives
+        message_lower = message_text.lower()
+        wants_to_skip = message_lower in SKIP_URL_KEYWORDS
+        
+        if wants_to_skip:
+            logger.info("User skipped providing URL")
+            processing_msg = await update.message.reply_text("✅ Saving job without URL...")
+            await save_and_confirm_job(update, context, pending_job_data, processing_msg)
+            return
+        
+        # Try to extract URL from message
+        provided_url = utils.extract_url(message_text)
+        
+        if provided_url:
+            logger.info(f"User provided URL: {provided_url}")
+            pending_job_data['url'] = provided_url
+            processing_msg = await update.message.reply_text("✅ Saving job with URL...")
+            await save_and_confirm_job(update, context, pending_job_data, processing_msg)
+            return
+        else:
+            # Not a valid URL
+            logger.warning("User provided text is not a valid URL")
+            await update.message.reply_text(
+                "⚠️ That doesn't look like a valid URL.\n\n"
+                "Saving the job without a link..."
+            )
+            processing_msg = await update.message.reply_text("⏳ Saving job...")
+            await save_and_confirm_job(update, context, pending_job_data, processing_msg)
+            return
     
     message_text = update.message.text.strip()
     
