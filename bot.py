@@ -31,8 +31,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Constants for user input matching
-# Keywords that indicate user wants to skip providing URL
-SKIP_URL_KEYWORDS = ['no', 'skip', 'none', 'no link', 'nope', 'na', 'n/a']
+# Keywords that indicate user wants to skip providing URL (exact match only for clarity)
+SKIP_URL_KEYWORDS = ['no', 'skip', 'none', 'no link', 'nope', 'na', 'n/a', 'n']
+
+# Default values for missing job data
+DEFAULT_COMPANY = 'Unknown Company'
+DEFAULT_POSITION = 'Unknown Position'
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -322,8 +326,8 @@ async def save_and_confirm_job(update: Update, context: ContextTypes.DEFAULT_TYP
     """
     # Check if critical fields are missing
     # Only require at least ONE of company or position (not both)
-    has_company = job_data.get('company') not in [None, 'Unknown Company', '']
-    has_position = job_data.get('position') not in [None, 'Unknown Position', '']
+    has_company = job_data.get('company') not in [None, DEFAULT_COMPANY, '']
+    has_position = job_data.get('position') not in [None, DEFAULT_POSITION, '']
     
     # Track if we need to warn the user about missing critical fields
     warn_user_about_fields = False
@@ -360,7 +364,7 @@ async def save_and_confirm_job(update: Update, context: ContextTypes.DEFAULT_TYP
     
     # Add warning about missing fields if needed
     if warn_user_about_fields:
-        confirmation_message += "\n\n⚠️ **Note:** Company and position were not found. Please update 'Unknown Company' and 'Unknown Position' in your sheet."
+        confirmation_message += f"\n\n⚠️ **Note:** Company and position were not found. Please update '{DEFAULT_COMPANY}' and '{DEFAULT_POSITION}' in your sheet."
     
     # Create inline keyboard
     keyboard = []
@@ -408,18 +412,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['pending_job_data'] = None
         
         # Check if user wants to skip providing URL
-        # Check if the message is a common "skip" phrase
+        # Only check for exact matches to avoid false positives
         message_lower = message_text.lower().strip()
-        
-        # Check for exact matches or word-based matches
-        wants_to_skip = (
-            message_lower in SKIP_URL_KEYWORDS or  # Exact match
-            message_lower == 'n' or  # Single 'n' is skip
-            message_lower.startswith('skip ') or  # "skip something"
-            message_lower.startswith('no ') or  # "no thanks", "no link", etc.
-            message_lower.startswith('none') or  # "none available"
-            message_lower.startswith('nope')  # "nope thanks"
-        )
+        wants_to_skip = message_lower in SKIP_URL_KEYWORDS
         
         if wants_to_skip:
             logger.info("User skipped providing URL")

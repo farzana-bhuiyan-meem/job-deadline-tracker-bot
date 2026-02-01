@@ -8,6 +8,26 @@ from typing import Optional, Dict
 from urllib.parse import urlparse
 import config
 
+# Default values for missing job data
+DEFAULT_COMPANY = 'Unknown Company'
+DEFAULT_POSITION = 'Unknown Position'
+
+
+def _get_or_default(value, default):
+    """
+    Get value or return default if value is None or empty string.
+    
+    Args:
+        value: Value to check
+        default: Default value to return
+        
+    Returns:
+        Original value or default
+    """
+    if value is None or value == '':
+        return default
+    return value
+
 
 def is_valid_url(url: str) -> bool:
     """
@@ -54,15 +74,9 @@ def format_job_message(job_data: Dict) -> str:
     Returns:
         Formatted message string
     """
-    # Get values - use explicit None checks for proper handling
-    company = job_data.get('company')
-    if company is None or company == '':
-        company = 'Unknown Company'
-    
-    position = job_data.get('position')
-    if position is None or position == '':
-        position = 'Unknown Position'
-    
+    # Get values - use helper function for proper default handling
+    company = _get_or_default(job_data.get('company'), DEFAULT_COMPANY)
+    position = _get_or_default(job_data.get('position'), DEFAULT_POSITION)
     deadline = job_data.get('deadline')
     salary = job_data.get('salary')
     location = job_data.get('location')

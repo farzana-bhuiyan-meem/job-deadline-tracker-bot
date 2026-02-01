@@ -10,6 +10,10 @@ from typing import Optional, Dict
 import dateparser
 import config
 
+# Default values for missing job data
+DEFAULT_COMPANY = 'Unknown Company'
+DEFAULT_POSITION = 'Unknown Position'
+
 # Import Gemini API with warning suppression
 import warnings
 with warnings.catch_warnings():
@@ -275,8 +279,8 @@ def _get_default_job_data(url: str) -> Dict:
         Dictionary with default values
     """
     return {
-        'company': 'Unknown Company',
-        'position': 'Unknown Position',
+        'company': DEFAULT_COMPANY,
+        'position': DEFAULT_POSITION,
         'deadline': None,
         'salary': None,
         'location': None,
