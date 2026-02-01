@@ -19,7 +19,7 @@
 
 ## 🎬 How It Works
 
-1. **Send a job URL** to the Telegram bot
+1. **Send a job URL** to the Telegram bot **OR** paste the job description text
 2. **AI extracts** all details (company, position, deadline, salary, location)
 3. **Saved to Google Sheet** with color coding by urgency
 4. **Get reminders** automatically before deadlines
@@ -133,12 +133,38 @@ Open Telegram, find your bot, and send `/start`
 
 ## 💬 Usage Examples
 
-### Adding a Job
+### Method 1: Adding a Job via URL
 
 Simply send any job posting URL:
 
 ```
 https://www.bdjobs.com/jobs/xyz
+```
+
+### Method 2: Adding a Job via Text
+
+Copy and paste the entire job description:
+
+```
+Job Title: HR Intern
+Company: Helium Bangladesh
+Location: Niketon, Dhaka
+Salary: 6,000 BDT
+Deadline: February 20, 2026
+
+We are looking for an enthusiastic HR Intern to join our team...
+[rest of job description]
+```
+
+### Method 3: Mixed (URL + Text)
+
+Send the URL followed by the job description text (useful when the URL is hard to scrape like Facebook posts):
+
+```
+https://www.facebook.com/jobs/123456
+Job Title: HR Intern
+Company: Helium Bangladesh
+...
 ```
 
 The bot will:
@@ -159,11 +185,11 @@ The bot will:
 ```
 ✓ Job Added Successfully!
 
-🏢 Company: Tech Solutions Ltd
-💼 Position: Frontend Developer (React)
-📅 Deadline: February 15, 2026 (14 days left)
-📍 Location: Dhaka, Bangladesh
-💰 Salary: 50,000-60,000 BDT
+🏢 Company: Helium Bangladesh
+💼 Position: HR Intern
+📅 Deadline: February 20, 2026 (19 days left)
+📍 Location: Niketon, Dhaka
+💰 Salary: 6,000 BDT
 
 🔗 Link saved to your tracker
 ⏰ I'll remind you 3 days before deadline
@@ -273,8 +299,9 @@ For typical usage (50 jobs/month), you'll stay well within all free tier limits.
 
 ### "Failed to fetch job posting"?
 
-- Website may block automated access
-- Try the URL in your browser first
+- Website may block automated access (e.g., Facebook, LinkedIn)
+- Try copying and pasting the job description text directly instead
+- Check if the URL works in your browser
 - Check internet connection
 
 ### "Failed to save to Google Sheet"?

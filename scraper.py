@@ -16,7 +16,7 @@ class ScraperError(Exception):
     pass
 
 
-def fetch_job_text(url: str) -> str:
+def fetch_job_text(url: str) -> dict:
     """
     Fetch clean text from job posting URL using Jina AI Reader.
     Fallback to requests + BeautifulSoup if Jina fails.
@@ -25,10 +25,13 @@ def fetch_job_text(url: str) -> str:
         url: Job posting URL
         
     Returns:
-        Clean text content of job posting
+        Dictionary with keys:
+        - 'text': extracted text (empty string if failed)
+        - 'success': bool indicating if fetch was successful
+        - 'error': error message if failed (None if successful)
+        - 'source': 'jina', 'beautifulsoup', or 'failed'
         
-    Raises:
-        ScraperError: If unable to fetch content
+    Note: This function no longer raises ScraperError. Check 'success' field instead.
     """
     # Try Jina AI Reader first
     try:
@@ -36,7 +39,12 @@ def fetch_job_text(url: str) -> str:
         text = _fetch_with_jina(url)
         if text:
             logger.info("Successfully fetched content with Jina AI Reader")
-            return text
+            return {
+                'text': text,
+                'success': True,
+                'error': None,
+                'source': 'jina'
+            }
     except Exception as e:
         logger.warning(f"Jina AI Reader failed: {str(e)}, trying fallback method")
     
@@ -46,12 +54,29 @@ def fetch_job_text(url: str) -> str:
         text = _fetch_with_beautifulsoup(url)
         if text:
             logger.info("Successfully fetched content with BeautifulSoup")
-            return text
+            return {
+                'text': text,
+                'success': True,
+                'error': None,
+                'source': 'beautifulsoup'
+            }
     except Exception as e:
         logger.error(f"BeautifulSoup fallback also failed: {str(e)}")
-        raise ScraperError(f"Unable to fetch content from URL: {str(e)}")
     
-    raise ScraperError("Unable to fetch content from URL")
+    # Both methods failed
+    error_msg = (
+        "Could not scrape this URL. The website may require login, "
+        "block automated access, or be temporarily unavailable.\n\n"
+        "💡 Tip: Copy and paste the job description text directly, "
+        "and I'll extract the details for you!"
+    )
+    
+    return {
+        'text': '',
+        'success': False,
+        'error': error_msg,
+        'source': 'failed'
+    }
 
 
 def _fetch_with_jina(url: str) -> Optional[str]:

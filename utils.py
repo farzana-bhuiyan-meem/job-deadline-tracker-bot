@@ -212,3 +212,48 @@ def get_current_time() -> datetime:
         Current datetime with timezone
     """
     return datetime.now(config.TIMEZONE)
+
+
+def extract_url(text: str) -> Optional[str]:
+    """
+    Extract URL from text if present.
+    
+    Args:
+        text: Text that may contain a URL
+        
+    Returns:
+        URL string or None if not found
+    """
+    # Simple URL detection pattern
+    url_pattern = r'https?://[^\s]+'
+    match = re.search(url_pattern, text)
+    if match:
+        return match.group(0)
+    return None
+
+
+def detect_job_description(text: str) -> bool:
+    """
+    Detect if text looks like a job description.
+    
+    Args:
+        text: Text to analyze
+        
+    Returns:
+        True if text appears to be a job description, False otherwise
+    """
+    # Job-related keywords that indicate a job description
+    job_keywords = [
+        'job title', 'position', 'company', 'responsibilities', 
+        'requirements', 'qualifications', 'salary', 'apply',
+        'deadline', 'hiring', 'vacancy', 'career', 'role',
+        'work experience', 'education', 'skills required',
+        'employment', 'job description', 'compensation',
+        'benefits', 'workplace', 'office', 'intern', 'internship'
+    ]
+    
+    text_lower = text.lower()
+    keyword_count = sum(1 for keyword in job_keywords if keyword in text_lower)
+    
+    # If text is >100 chars and has 3+ job keywords, likely a job description
+    return len(text) > 100 and keyword_count >= 3

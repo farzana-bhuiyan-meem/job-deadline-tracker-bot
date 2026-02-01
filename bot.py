@@ -46,31 +46,34 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 I help you track job application deadlines automatically!
 
 📝 **How to use:**
-1️⃣ Send me any job posting URL
-2️⃣ I'll extract the details and deadline
-3️⃣ I'll save it to your Google Sheet
-4️⃣ I'll remind you before the deadline!
 
-🔗 **Supported platforms:**
-• BDJobs.com
-• LinkedIn
-• Indeed
-• Facebook Jobs
-• Bdjobs24.com
-• Chakri.com
-• And many more!
+**Method 1: Send Job URL** 🔗
+Just send me any job posting link from BDJobs, LinkedIn, Indeed, Facebook Jobs, or any job portal.
 
-⏰ **Reminders:**
-• 3 days before deadline
-• 1 day before deadline
-• Morning of deadline (8 AM)
+**Method 2: Paste Job Description** 📋
+Copy the entire job posting text and send it to me.
+I'll extract all the details automatically!
+
+**What I extract:**
+• Company name
+• Job position
+• Application deadline
+• Salary range
+• Location
+• And more!
+
+📊 **Features:**
+✅ Automatic save to Google Sheets
+✅ Smart reminders (3 days, 1 day, deadline day)
+✅ Color-coded urgency tracking
+✅ Mark jobs as applied
 
 📋 **Commands:**
-/help - Show this guide
+/help - Show detailed guide
 /list - View upcoming deadlines
 /applied [number] - Mark job as applied
 
-Just send me a job URL to get started! 🚀
+Just send me a job URL or paste the job description to get started! 🚀
 """
     
     await update.message.reply_text(welcome_message)
@@ -81,10 +84,22 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"User {update.effective_user.id} requested help")
     
     help_message = """
-📖 **Job Deadline Tracker - Help Guide**
+📚 **How to Use Job Deadline Tracker Bot**
 
-**BASIC USAGE:**
-Simply send me a job posting URL and I'll do the rest!
+**Method 1: Send Job URL** 🔗
+Just send me any job posting link from:
+• BDJobs, LinkedIn, Indeed
+• Company websites
+• Facebook Jobs (if accessible)
+• Any job portal
+
+**Method 2: Paste Job Description** 📝
+Copy the entire job posting text and send it to me.
+I'll extract all the details automatically!
+
+**Method 3: Mixed** 🔗📝
+Send the URL followed by the job description text
+(useful when the URL is hard to scrape)
 
 **COMMANDS:**
 
@@ -118,12 +133,12 @@ I'll remind you:
 • Morning of deadline day (8 AM)
 
 **TIPS:**
-• Works with most job posting websites
-• Just paste the URL, no need to type anything else
+• If a URL is hard to scrape (like Facebook), just paste the job text directly
+• Works with Bengali text too
 • Reminders stop after deadline or when marked as applied
 • All data is saved in your private Google Sheet
 
-Need help? Just send me a job URL to see it in action! 💼
+Just send me a job link or paste the job description! 💼
 """
     
     await update.message.reply_text(help_message)
@@ -192,8 +207,139 @@ async def applied_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ An error occurred. Please try again.")
 
 
-async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle URL messages."""
+async def process_job_url(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str, processing_msg):
+    """
+    Process a job URL by scraping and extracting details.
+    
+    Args:
+        update: Telegram update object
+        context: Telegram context object
+        url: Job posting URL
+        processing_msg: Processing message to update
+    """
+    try:
+        # Step 1: Scrape the URL
+        logger.info(f"Scraping URL: {url}")
+        await processing_msg.edit_text("⏳ Fetching job details from URL...")
+        
+        scrape_result = scraper.fetch_job_text(url)
+        
+        # Check if scraping failed
+        if not scrape_result['success']:
+            logger.warning(f"Scraping failed for URL: {url}")
+            await processing_msg.edit_text(
+                f"⚠️ {scrape_result['error']}\n\n"
+                "💡 **Alternative:** Copy and paste the job description text, "
+                "and I'll extract the details for you!"
+            )
+            return
+        
+        job_text = scrape_result['text']
+        
+        # Step 2: Extract job details
+        logger.info("Extracting job details from scraped text")
+        await processing_msg.edit_text("⏳ Extracting job information...")
+        
+        job_data = extractor.extract_job_details(job_text, url)
+        
+        # Step 3: Save and confirm
+        await save_and_confirm_job(update, context, job_data, processing_msg)
+    
+    except Exception as e:
+        logger.error(f"Error processing job URL: {str(e)}", exc_info=True)
+        await processing_msg.edit_text(
+            "❌ An unexpected error occurred while processing the URL.\n\n"
+            "Please try again or paste the job description text directly."
+        )
+
+
+async def process_job_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, url: str, processing_msg):
+    """
+    Process job description text directly (without URL scraping).
+    
+    Args:
+        update: Telegram update object
+        context: Telegram context object
+        text: Job description text
+        url: Job posting URL (optional, may be None)
+        processing_msg: Processing message to update
+    """
+    try:
+        # Extract job details from text
+        logger.info("Extracting job details from pasted text")
+        await processing_msg.edit_text("⏳ Extracting job information from text...")
+        
+        job_data = extractor.extract_job_details(text, url)
+        
+        # Save and confirm
+        await save_and_confirm_job(update, context, job_data, processing_msg)
+    
+    except Exception as e:
+        logger.error(f"Error processing job text: {str(e)}", exc_info=True)
+        await processing_msg.edit_text(
+            "❌ An unexpected error occurred while processing the job description.\n\n"
+            "Please try again or check the text format."
+        )
+
+
+async def save_and_confirm_job(update: Update, context: ContextTypes.DEFAULT_TYPE, job_data: dict, processing_msg):
+    """
+    Save job to Google Sheets and send confirmation message.
+    
+    Args:
+        update: Telegram update object
+        context: Telegram context object
+        job_data: Extracted job data dictionary
+        processing_msg: Processing message to update
+    """
+    # Check if critical fields are missing
+    has_company = job_data.get('company') and job_data['company'] != 'Unknown Company'
+    has_position = job_data.get('position') and job_data['position'] != 'Unknown Position'
+    
+    if not has_company or not has_position:
+        logger.warning("Critical fields missing in extraction")
+        await processing_msg.edit_text(
+            "⚠️ I had trouble extracting some information.\n\n"
+            f"Company: {job_data.get('company', 'Not found')}\n"
+            f"Position: {job_data.get('position', 'Not found')}\n\n"
+            "The job has been added to your sheet, but you may need to update these fields manually."
+        )
+    
+    # Check if deadline was found
+    if not job_data.get('deadline'):
+        logger.info("No deadline found in extraction")
+    
+    # Step 3: Save to Google Sheets
+    logger.info("Saving to Google Sheet")
+    await processing_msg.edit_text("⏳ Saving to Google Sheet...")
+    
+    success = sheets.add_job(job_data)
+    
+    if not success:
+        await processing_msg.edit_text(
+            "❌ Failed to save to Google Sheet.\n\n"
+            "Please check your Google Sheets configuration."
+        )
+        return
+    
+    # Step 4: Send confirmation
+    logger.info("Job processed successfully")
+    
+    confirmation_message = utils.format_job_message(job_data)
+    
+    # Create inline keyboard
+    keyboard = []
+    if config.GOOGLE_SHEET_ID:
+        sheet_url = f"https://docs.google.com/spreadsheets/d/{config.GOOGLE_SHEET_ID}"
+        keyboard.append([InlineKeyboardButton("📊 View Google Sheet", url=sheet_url)])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
+    
+    await processing_msg.edit_text(confirmation_message, reply_markup=reply_markup)
+
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle incoming messages - URLs or text job descriptions."""
     logger.info(f"User {update.effective_user.id} sent a message")
     
     # Security check
@@ -204,85 +350,34 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message_text = update.message.text.strip()
     
     # Check if message contains a URL
-    if not utils.is_valid_url(message_text):
-        await update.message.reply_text(
-            "Please send a valid job posting URL.\n\n"
-            "Example: https://www.bdjobs.com/jobs/...\n\n"
-            "Use /help for more information."
-        )
-        return
+    url = utils.extract_url(message_text)
+    
+    # Detect if message looks like a job description
+    is_job_description = utils.detect_job_description(message_text)
+    
+    logger.info(f"URL detected: {url is not None}, Job description detected: {is_job_description}")
     
     # Send processing message
     processing_msg = await update.message.reply_text("⏳ Processing job posting...\nThis may take a few seconds.")
     
-    try:
-        # Step 1: Scrape the URL
-        logger.info(f"Scraping URL: {message_text}")
-        await processing_msg.edit_text("⏳ Fetching job details...")
-        
-        try:
-            job_text = scraper.fetch_job_text(message_text)
-        except scraper.ScraperError as e:
-            logger.error(f"Scraper error: {str(e)}")
-            await processing_msg.edit_text(
-                "❌ Failed to fetch job posting.\n\n"
-                "Possible reasons:\n"
-                "• Website blocks automated access\n"
-                "• Invalid or expired URL\n"
-                "• Network timeout\n\n"
-                "Please try a different URL or check if the link works in your browser."
-            )
-            return
-        
-        # Step 2: Extract job details
-        logger.info("Extracting job details")
-        await processing_msg.edit_text("⏳ Extracting job information...")
-        
-        job_data = extractor.extract_job_details(message_text, job_text)
-        
-        # Check if deadline was found
-        if not job_data.get('deadline'):
-            await processing_msg.edit_text(
-                "⚠️ Could not automatically detect the application deadline.\n\n"
-                "Please check the job posting manually and add the deadline to your Google Sheet.\n\n"
-                f"Company: {job_data.get('company', 'Unknown')}\n"
-                f"Position: {job_data.get('position', 'Unknown')}\n\n"
-                "The job has been added to your sheet without a deadline."
-            )
-        
-        # Step 3: Save to Google Sheets
-        logger.info("Saving to Google Sheet")
-        await processing_msg.edit_text("⏳ Saving to Google Sheet...")
-        
-        success = sheets.add_job(job_data)
-        
-        if not success:
-            await processing_msg.edit_text(
-                "❌ Failed to save to Google Sheet.\n\n"
-                "Please check your Google Sheets configuration."
-            )
-            return
-        
-        # Step 4: Send confirmation
-        logger.info("Job processed successfully")
-        
-        confirmation_message = utils.format_job_message(job_data)
-        
-        # Create inline keyboard
-        keyboard = []
-        if config.GOOGLE_SHEET_ID:
-            sheet_url = f"https://docs.google.com/spreadsheets/d/{config.GOOGLE_SHEET_ID}"
-            keyboard.append([InlineKeyboardButton("📊 View Google Sheet", url=sheet_url)])
-        
-        reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
-        
-        await processing_msg.edit_text(confirmation_message, reply_markup=reply_markup)
-    
-    except Exception as e:
-        logger.error(f"Unexpected error processing URL: {str(e)}", exc_info=True)
+    # Determine processing mode
+    if url and not is_job_description:
+        # URL only - scrape it
+        logger.info("Processing as URL-only")
+        await process_job_url(update, context, url, processing_msg)
+    elif is_job_description:
+        # Text job description (with or without URL)
+        # Use the text directly for extraction
+        logger.info("Processing as job description text")
+        await process_job_text(update, context, message_text, url, processing_msg)
+    else:
+        # Not a URL or job description
         await processing_msg.edit_text(
-            "❌ An unexpected error occurred.\n\n"
-            "Please try again or contact support if the problem persists."
+            "Please send me a job posting URL or paste the job description text.\n\n"
+            "💡 **Examples:**\n"
+            "• Send a URL: https://www.bdjobs.com/jobs/...\n"
+            "• Paste job text: Copy the entire job posting and send it to me\n\n"
+            "Use /help for more information."
         )
 
 
@@ -355,8 +450,8 @@ def main():
     application.add_handler(CommandHandler("list", list_command))
     application.add_handler(CommandHandler("applied", applied_command))
     
-    # Add message handler for URLs
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_url))
+    # Add message handler for URLs and text job descriptions
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     # Add callback query handler
     application.add_handler(CallbackQueryHandler(handle_callback))
