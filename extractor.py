@@ -109,122 +109,132 @@ def extract_deadline_regex(text: str) -> Optional[datetime]:
 
 def extract_job_details_gemini(text: str, url: str = None) -> Dict:
     """
-    Use Gemini API to extract job details including:
-    - company_name
-    - position
-    - deadline (if not found by regex)
-    - salary
-    - location
-    - description_summary
+    Extract job details using Gemini 1.5 Flash API.
     
     Args:
-        text: Job posting text
-        url: Job posting URL (optional)
+        text: Job posting text to extract from
+        url: Optional URL of job posting
         
     Returns:
-        Dictionary with extracted fields
+        dict with extracted fields: company, position, deadline, salary, location, description
     """
     logger.info("Using Gemini API to extract job details")
     
     if not config.GEMINI_API_KEY or not genai:
         logger.error("Gemini API not configured or not available")
-        return _get_default_job_data(url)
+        return _get_empty_job_data()
     
     try:
+        # Use Gemini 1.5 Flash model
         model = genai.GenerativeModel(config.GEMINI_MODEL)
         
         # Limit text length to avoid token limits
         text_sample = text[:5000] if len(text) > 5000 else text
         
-        # Improved extraction prompt with better instructions
-        url_line = f"\nJob URL: {url}" if url else ""
-        
+        # Enhanced extraction prompt
         prompt = f"""
-You are an expert at extracting job posting information. Analyze the following job posting text carefully and extract ALL available information.
+You are an expert at extracting job posting information. Analyze this job posting text very carefully.
 
-Job Posting Text:
-{text_sample}{url_line}
+JOB POSTING TEXT:
+{text_sample}
 
-Extract the following information with HIGH ACCURACY:
+{f"URL: {url}" if url else ""}
 
-1. **Company Name**: Look for company name, organization name, employer name. Check near phrases like "Company:", "About us:", "Join our team at", email domains (@company.com), footer text, etc.
+Extract the following information with HIGH ACCURACY. Look at the ENTIRE text carefully:
 
-2. **Job Title/Position**: Look for "Job Title:", "Position:", "Role:", "Hiring for:", "Vacancy:", or similar. This is usually prominent at the top.
+1. **Company Name**: Look for phrases like "Company:", "About Us:", "Join", organization name, or check email domains (e.g., "contact@helium.com" means company is likely "Helium").
 
-3. **Application Deadline**: Look for "Deadline:", "Apply by:", "Last date:", "Applications close:", "Valid till:", or any date mentioned with deadline context. Return in YYYY-MM-DD format.
+2. **Job Title/Position**: Look for "Job Title:", "Position:", "Role:", "Hiring for:", "Vacancy:", or prominent text at the beginning.
 
-4. **Salary/Compensation**: Look for "Salary:", "Compensation:", "Pay:", "BDT", "USD", "$", "৳", "Tk", monthly/yearly amounts, salary ranges. Include currency and full details found.
+3. **Application Deadline**: Look for "Deadline:", "Apply by:", "Last date:", "Applications close:", any date with deadline context. Format as YYYY-MM-DD.
 
-5. **Location**: Look for "Location:", "Office:", "Workplace:", city names like "Dhaka", "Remote", "Work from home", area names like "Gulshan", "Banani", "Niketon", etc.
+4. **Salary/Compensation**: Look for "Salary:", "Monthly Salary:", "Compensation:", "BDT", "USD", "৳", numbers with currency symbols.
 
-6. **Brief Description**: Summarize the key responsibilities or job description in 1-2 sentences (max 200 characters).
+5. **Location**: Look for "Location:", "Office:", "Workplace:", city names like "Dhaka", "Chittagong", area names like "Gulshan", "Banani", "Niketon", etc.
 
-IMPORTANT INSTRUCTIONS:
-- Be thorough and check the ENTIRE text carefully
-- Even if a field isn't clearly labeled, try to infer it from context
-- For company name: check email addresses (e.g., "contact@helium.com" → likely "Helium" or "Helium Bangladesh")
-- Return actual values found in the text, not generic placeholders
-- Only return null if the information is genuinely not present anywhere in the text
-- Be smart about context - if you see "HR Intern at Helium Bangladesh", extract both position and company
+6. **Description**: Summarize the key responsibilities in 1-2 sentences (max 200 characters).
 
-Return ONLY valid JSON in this exact format (no markdown, no explanation):
+CRITICAL INSTRUCTIONS:
+- Read the ENTIRE text carefully before extracting
+- Look for information even if it's not labeled
+- Company names are often at the top or in email addresses
+- Return actual values found in the text, NOT placeholder text like "Not specified"
+- Only return null if information is genuinely not present
+
+Return ONLY valid JSON with NO additional text:
+
 {{
-  "company": "exact company name found or null",
-  "position": "exact job title found or null",
+  "company": "exact company name or null",
+  "position": "exact job title or null",
   "deadline": "YYYY-MM-DD or null",
-  "salary": "full salary details with currency or null",
-  "location": "location details or null",
+  "salary": "full salary details or null",
+  "location": "location or null",
   "description": "brief summary or null"
 }}
-
-Do not include any text outside the JSON block.
 """
-        
+
+        # Generate response
         response = model.generate_content(prompt)
+        
+        # Extract JSON from response
         response_text = response.text.strip()
         
-        # Clean response text (remove markdown code blocks if present)
-        if response_text.startswith("```"):
-            response_text = re.sub(r'^```(?:json)?\n?', '', response_text)
-            response_text = re.sub(r'\n?```$', '', response_text)
+        # Log raw response for debugging
+        logger.info(f"Gemini raw response: {response_text[:500]}")
         
-        # Parse JSON response
-        try:
-            job_data = json.loads(response_text)
-            logger.info("Successfully extracted job details with Gemini API")
-            logger.info(f"Extracted data: {job_data}")
-            
-            # Parse deadline if present
-            if job_data.get('deadline') and job_data['deadline'] != 'null':
-                try:
-                    deadline_str = job_data['deadline']
-                    deadline = dateparser.parse(
-                        deadline_str,
-                        settings={
-                            'TIMEZONE': str(config.TIMEZONE),
-                            'RETURN_AS_TIMEZONE_AWARE': True
-                        }
-                    )
-                    job_data['deadline'] = deadline
-                except Exception as e:
-                    logger.warning(f"Failed to parse Gemini deadline: {str(e)}")
-                    job_data['deadline'] = None
-            else:
-                job_data['deadline'] = None
-            
-            # Add URL to job data if provided
-            if url:
-                job_data['url'] = url
-            
-            return job_data
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse Gemini JSON response: {str(e)}")
-            logger.error(f"Response text: {response_text}")
-            return _get_default_job_data(url)
-    
+        # Remove markdown code blocks if present
+        if response_text.startswith('```'):
+            response_text = response_text.split('```')[1]
+            if response_text.startswith('json'):
+                response_text = response_text[4:]
+            response_text = response_text.strip()
+        
+        # Parse JSON
+        extracted_data = json.loads(response_text)
+        
+        logger.info(f"Gemini extraction successful: {extracted_data}")
+        
+        # Parse deadline if present
+        if extracted_data.get('deadline') and extracted_data['deadline'] != 'null':
+            try:
+                deadline_str = extracted_data['deadline']
+                deadline = dateparser.parse(
+                    deadline_str,
+                    settings={
+                        'TIMEZONE': str(config.TIMEZONE),
+                        'RETURN_AS_TIMEZONE_AWARE': True
+                    }
+                )
+                extracted_data['deadline'] = deadline
+            except Exception as e:
+                logger.warning(f"Failed to parse Gemini deadline: {str(e)}")
+                extracted_data['deadline'] = None
+        else:
+            extracted_data['deadline'] = None
+        
+        # Add URL to job data if provided
+        if url:
+            extracted_data['url'] = url
+        
+        # Validate and clean data - replace null strings with None
+        return {
+            'company': extracted_data.get('company') or None,
+            'position': extracted_data.get('position') or None,
+            'deadline': extracted_data.get('deadline') or None,
+            'salary': extracted_data.get('salary') or None,
+            'location': extracted_data.get('location') or None,
+            'description': extracted_data.get('description') or None,
+            'url': extracted_data.get('url')
+        }
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse Gemini JSON response: {e}")
+        logger.error(f"Response text was: {response_text[:500]}")
+        return _get_empty_job_data()
+        
     except Exception as e:
-        logger.error(f"Gemini API extraction failed: {str(e)}")
-        return _get_default_job_data(url)
+        logger.error(f"Gemini API extraction failed: {e}")
+        return _get_empty_job_data()
 
 
 def extract_job_details(text: str, url: str = None) -> Dict:
@@ -264,6 +274,23 @@ def extract_job_details(text: str, url: str = None) -> Dict:
     return job_data
 
 
+def _get_empty_job_data() -> Dict:
+    """
+    Return empty job data dict with None values.
+    
+    Returns:
+        Dictionary with None values for all fields
+    """
+    return {
+        'company': None,
+        'position': None,
+        'deadline': None,
+        'salary': None,
+        'location': None,
+        'description': None
+    }
+
+
 def _get_default_job_data(url: str) -> Dict:
     """
     Return default job data structure when extraction fails.
@@ -275,8 +302,8 @@ def _get_default_job_data(url: str) -> Dict:
         Dictionary with default values
     """
     return {
-        'company': 'Unknown Company',
-        'position': 'Unknown Position',
+        'company': None,
+        'position': None,
         'deadline': None,
         'salary': None,
         'location': None,
