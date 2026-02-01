@@ -189,11 +189,11 @@ def extract_position_regex(text: str) -> Optional[str]:
         # "Vacancy: Senior Developer"
         r'Vacancy:\s*([A-Z][A-Za-z\s\-–&/(),]+?)(?:\n|Job|Employment|$)',
         
-        # "We are looking for a Software Engineer"
-        r'looking for\s+(?:a|an)\s+([A-Z][A-Za-z\s\-–&/(),]+?)(?:\n|to|with|who|$)',
-        
-        # "is looking for IT & Odoo Software Intern" (from your example)
+        # "is looking for IT & Odoo Software Intern" (from your example) - prioritize this
         r'is looking for\s+([A-Z][A-Za-z\s\-–&/(),]+?)(?:\n|Job|to|$)',
+        
+        # "We are looking for a Software Engineer" - check this last
+        r'looking for\s+(?:a|an)\s+([A-Z][A-Za-z\s\-–&/(),]+?)(?:\n|to|with|who|$)',
     ]
     
     for pattern in patterns:
@@ -542,28 +542,35 @@ def extract_job_details_gemini(text: str, url: str = None) -> Dict:
     """
     logger.info("Using Gemini API to extract job details")
     
+    # Limit text length
+    text_sample = text[:5000] if len(text) > 5000 else text
+    
+    # Initialize result dict
+    job_data = {
+        'company': None,
+        'position': None,
+        'deadline': None,
+        'salary': None,
+        'location': None,
+        'description': None,
+        'url': url
+    }
+    
     if not config.GEMINI_API_KEY or not genai:
-        logger.error("Gemini API not configured or not available")
-        return _get_default_job_data(url)
+        logger.warning("Gemini API not configured or not available, using regex-only extraction")
+        # Try regex extraction for all fields
+        job_data['company'] = extract_company_regex(text_sample)
+        job_data['position'] = extract_position_regex(text_sample)
+        job_data['location'] = extract_location_regex(text_sample)
+        job_data['salary'] = extract_salary_regex(text_sample)
+        # Deadline will be handled by extract_job_details() function
+        # Description has no regex fallback
+        return job_data
     
     try:
         # Initialize Gemini model
         model = genai.GenerativeModel(config.GEMINI_MODEL)
         logger.info(f"Initializing Gemini model: {config.GEMINI_MODEL}")
-        
-        # Limit text length
-        text_sample = text[:5000] if len(text) > 5000 else text
-        
-        # Initialize result dict
-        job_data = {
-            'company': None,
-            'position': None,
-            'deadline': None,
-            'salary': None,
-            'location': None,
-            'description': None,
-            'url': url
-        }
         
         # PASS 1: Extract company name
         job_data['company'] = _extract_company(model, text_sample)
@@ -614,7 +621,13 @@ def extract_job_details_gemini(text: str, url: str = None) -> Dict:
     except Exception as e:
         logger.error(f"Gemini API extraction failed: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
-        return _get_default_job_data(url)
+        # Fall back to regex-only extraction
+        logger.info("Falling back to regex-only extraction due to Gemini failure")
+        job_data['company'] = extract_company_regex(text_sample)
+        job_data['position'] = extract_position_regex(text_sample)
+        job_data['location'] = extract_location_regex(text_sample)
+        job_data['salary'] = extract_salary_regex(text_sample)
+        return job_data
 
 
 def extract_job_details(text: str, url: str = None) -> Dict:
