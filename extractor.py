@@ -8,14 +8,25 @@ import json
 from datetime import datetime
 from typing import Optional, Dict
 import dateparser
-import google.generativeai as genai
 import config
+
+# Import Gemini API with warning suppression
+import warnings
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=FutureWarning)
+    try:
+        import google.generativeai as genai
+    except ImportError:
+        genai = None
 
 logger = logging.getLogger(__name__)
 
 # Configure Gemini API
-if config.GEMINI_API_KEY:
-    genai.configure(api_key=config.GEMINI_API_KEY)
+if genai and config.GEMINI_API_KEY:
+    try:
+        genai.configure(api_key=config.GEMINI_API_KEY)
+    except Exception as e:
+        logger.warning(f"Failed to configure Gemini API: {e}")
 
 
 def extract_deadline_regex(text: str) -> Optional[datetime]:
@@ -115,8 +126,8 @@ def extract_job_details_gemini(text: str, url: str) -> Dict:
     """
     logger.info("Using Gemini API to extract job details")
     
-    if not config.GEMINI_API_KEY:
-        logger.error("Gemini API key not configured")
+    if not config.GEMINI_API_KEY or not genai:
+        logger.error("Gemini API not configured or not available")
         return _get_default_job_data(url)
     
     try:
