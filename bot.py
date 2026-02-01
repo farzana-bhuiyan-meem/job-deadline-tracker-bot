@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 # Constants for user input matching
 # Keywords that indicate user wants to skip providing URL (exact match only for clarity)
+# Note: 'n' is included as a common shorthand, but requires exact match to avoid false positives
 SKIP_URL_KEYWORDS = ['no', 'skip', 'none', 'no link', 'nope', 'na', 'n/a', 'n']
 
 # Default values for missing job data
@@ -378,7 +379,8 @@ async def save_and_confirm_job(update: Update, context: ContextTypes.DEFAULT_TYP
     
     # Add warning about missing fields if needed
     if warn_user_about_fields:
-        confirmation_message += f"\n\n⚠️ **Note:** Company and position were not found. Please update '{DEFAULT_COMPANY}' and '{DEFAULT_POSITION}' in your sheet."
+        sheet_text = "in your Google Sheet" if config.GOOGLE_SHEET_ID else "in your tracker"
+        confirmation_message += f"\n\n⚠️ **Note:** Company and position were not found. Please update '{DEFAULT_COMPANY}' and '{DEFAULT_POSITION}' {sheet_text}."
     
     # Create inline keyboard
     keyboard = []
