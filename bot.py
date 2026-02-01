@@ -353,8 +353,31 @@ async def handle_field_response(update: Update, context: ContextTypes.DEFAULT_TY
     user_response = update.message.text.strip()
     current_field = missing_fields[current_index]
     
-    # Store the field value
-    pending['extracted_data'][current_field] = user_response
+    # Store the field value with appropriate parsing
+    if current_field == 'deadline':
+        # Parse deadline input to datetime
+        try:
+            import dateparser
+            deadline = dateparser.parse(
+                user_response,
+                settings={
+                    'TIMEZONE': str(config.TIMEZONE),
+                    'RETURN_AS_TIMEZONE_AWARE': True,
+                    'PREFER_DATES_FROM': 'future'
+                }
+            )
+            if deadline:
+                pending['extracted_data'][current_field] = deadline
+            else:
+                # If parsing fails, store as string and let user know
+                pending['extracted_data'][current_field] = user_response
+                logger.warning(f"Could not parse deadline: {user_response}")
+        except Exception as e:
+            logger.warning(f"Error parsing deadline: {e}")
+            pending['extracted_data'][current_field] = user_response
+    else:
+        # For other fields, store as-is
+        pending['extracted_data'][current_field] = user_response
     
     # Move to next field
     current_index += 1

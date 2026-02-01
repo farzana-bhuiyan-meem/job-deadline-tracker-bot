@@ -126,7 +126,7 @@ def extract_job_details_gemini(text: str, url: str = None) -> Dict:
     
     try:
         # Use Gemini 1.5 Flash model
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel(config.GEMINI_MODEL)
         
         # Limit text length to avoid token limits
         text_sample = text[:5000] if len(text) > 5000 else text
