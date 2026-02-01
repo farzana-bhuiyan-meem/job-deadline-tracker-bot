@@ -282,6 +282,160 @@ async def process_job_text(update: Update, context: ContextTypes.DEFAULT_TYPE, t
         )
 
 
+async def handle_missing_fields(update: Update, context: ContextTypes.DEFAULT_TYPE, extracted_data: dict, url: str = None, job_text: str = None):
+    """
+    Handle missing fields by asking user for input.
+    
+    Args:
+        update: Telegram update
+        context: Bot context
+        extracted_data: Partially extracted job data
+        url: Job URL (optional)
+        job_text: Job description text (optional)
+    """
+    missing_fields = []
+    
+    # Check critical fields
+    if not extracted_data.get('company'):
+        missing_fields.append('company')
+    if not extracted_data.get('position'):
+        missing_fields.append('position')
+    if not extracted_data.get('deadline'):
+        missing_fields.append('deadline')
+    
+    if not missing_fields:
+        # All critical fields present, save the job
+        await save_job_to_sheet(update, context, extracted_data, url)
+        return
+    
+    # Store data in context for later
+    context.user_data['pending_job'] = {
+        'extracted_data': extracted_data,
+        'url': url,
+        'job_text': job_text,
+        'missing_fields': missing_fields,
+        'current_field': 0
+    }
+    
+    # Ask for first missing field
+    field_name = missing_fields[0]
+    field_prompts = {
+        'company': "What is the **company name**?",
+        'position': "What is the **job position/title**?",
+        'deadline': "What is the **application deadline**? (e.g., Feb 15, 2026)"
+    }
+    
+    await update.message.reply_text(
+        f"⚠️ I couldn't extract the {field_name} from the job posting.\n\n"
+        f"{field_prompts[field_name]}\n\n"
+        f"Please reply with the {field_name}."
+    )
+
+
+async def handle_field_response(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Handle user's response to missing field questions.
+    
+    Returns:
+        True if message was a field response, False otherwise
+    """
+    if 'pending_job' not in context.user_data:
+        return False  # Not in field collection mode
+    
+    pending = context.user_data['pending_job']
+    missing_fields = pending['missing_fields']
+    current_index = pending['current_field']
+    
+    if current_index >= len(missing_fields):
+        return False  # Already done
+    
+    # Get user's response
+    user_response = update.message.text.strip()
+    current_field = missing_fields[current_index]
+    
+    # Store the field value
+    pending['extracted_data'][current_field] = user_response
+    
+    # Move to next field
+    current_index += 1
+    pending['current_field'] = current_index
+    
+    if current_index < len(missing_fields):
+        # Ask for next field
+        next_field = missing_fields[current_index]
+        field_prompts = {
+            'company': "What is the **company name**?",
+            'position': "What is the **job position/title**?",
+            'deadline': "What is the **application deadline**? (e.g., Feb 15, 2026)"
+        }
+        
+        await update.message.reply_text(
+            f"✓ Got it!\n\n"
+            f"{field_prompts[next_field]}\n\n"
+            f"Please reply with the {next_field}."
+        )
+        return True
+    else:
+        # All fields collected, save the job
+        await update.message.reply_text("✓ All information collected! Saving job...")
+        
+        extracted_data = pending['extracted_data']
+        url = pending.get('url')
+        
+        # Clear pending data
+        del context.user_data['pending_job']
+        
+        # Save to sheet
+        await save_job_to_sheet(update, context, extracted_data, url)
+        return True
+
+
+async def save_job_to_sheet(update: Update, context: ContextTypes.DEFAULT_TYPE, job_data: dict, url: str = None):
+    """
+    Save job to Google Sheets and send confirmation message.
+    
+    Args:
+        update: Telegram update
+        context: Bot context
+        job_data: Job data dictionary
+        url: Job URL (optional)
+    """
+    # Ensure URL is in job data
+    if url and 'url' not in job_data:
+        job_data['url'] = url
+    
+    # Add extraction timestamp if not present
+    if 'added_on' not in job_data:
+        from datetime import datetime
+        job_data['added_on'] = datetime.now(config.TIMEZONE)
+    
+    # Save to Google Sheets
+    logger.info("Saving to Google Sheet")
+    success = sheets.add_job(job_data)
+    
+    if not success:
+        await update.message.reply_text(
+            "❌ Failed to save to Google Sheet.\n\n"
+            "Please check your Google Sheets configuration."
+        )
+        return
+    
+    # Send confirmation
+    logger.info("Job processed successfully")
+    
+    confirmation_message = utils.format_job_message(job_data)
+    
+    # Create inline keyboard
+    keyboard = []
+    if config.GOOGLE_SHEET_ID:
+        sheet_url = f"https://docs.google.com/spreadsheets/d/{config.GOOGLE_SHEET_ID}"
+        keyboard.append([InlineKeyboardButton("📊 View Google Sheet", url=sheet_url)])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
+    
+    await update.message.reply_text(confirmation_message, reply_markup=reply_markup)
+
+
 async def save_and_confirm_job(update: Update, context: ContextTypes.DEFAULT_TYPE, job_data: dict, processing_msg):
     """
     Save job to Google Sheets and send confirmation message.
@@ -293,20 +447,28 @@ async def save_and_confirm_job(update: Update, context: ContextTypes.DEFAULT_TYP
         processing_msg: Processing message to update
     """
     # Check if critical fields are missing
-    has_company = job_data.get('company') not in [None, 'Unknown Company', '']
-    has_position = job_data.get('position') not in [None, 'Unknown Position', '']
+    has_company = job_data.get('company') not in [None, '']
+    has_position = job_data.get('position') not in [None, '']
+    has_deadline = job_data.get('deadline') is not None
     
+    # If critical fields are missing, ask user for them
     if not has_company or not has_position:
         logger.warning("Critical fields missing in extraction")
         await processing_msg.edit_text(
-            "⚠️ I had trouble extracting some information.\n\n"
-            f"Company: {job_data.get('company', 'Not found')}\n"
-            f"Position: {job_data.get('position', 'Not found')}\n\n"
-            "The job has been added to your sheet, but you may need to update these fields manually."
+            "⚠️ I had trouble extracting some information from the job posting."
         )
+        # Trigger missing field handler
+        await handle_missing_fields(
+            update, 
+            context, 
+            job_data, 
+            job_data.get('url'),
+            None  # We don't have the original text here
+        )
+        return
     
-    # Check if deadline was found
-    if not job_data.get('deadline'):
+    # If only deadline is missing, mention it but proceed
+    if not has_deadline:
         logger.info("No deadline found in extraction")
     
     # Step 3: Save to Google Sheets
@@ -346,6 +508,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if config.TELEGRAM_USER_ID and str(update.effective_user.id) != config.TELEGRAM_USER_ID:
         await update.message.reply_text("Sorry, this bot is private.")
         return
+    
+    # Check if we're collecting missing fields
+    if await handle_field_response(update, context):
+        return  # Message was a field response, handled
     
     message_text = update.message.text.strip()
     
