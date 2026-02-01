@@ -293,8 +293,8 @@ async def save_and_confirm_job(update: Update, context: ContextTypes.DEFAULT_TYP
         processing_msg: Processing message to update
     """
     # Check if critical fields are missing
-    has_company = job_data.get('company') and job_data['company'] != 'Unknown Company'
-    has_position = job_data.get('position') and job_data['position'] != 'Unknown Position'
+    has_company = job_data.get('company') not in [None, 'Unknown Company', '']
+    has_position = job_data.get('position') not in [None, 'Unknown Position', '']
     
     if not has_company or not has_position:
         logger.warning("Critical fields missing in extraction")

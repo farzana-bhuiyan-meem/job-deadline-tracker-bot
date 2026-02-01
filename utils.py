@@ -224,11 +224,14 @@ def extract_url(text: str) -> Optional[str]:
     Returns:
         URL string or None if not found
     """
-    # Simple URL detection pattern
-    url_pattern = r'https?://[^\s]+'
+    # URL detection pattern that avoids trailing punctuation
+    url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
     match = re.search(url_pattern, text)
     if match:
-        return match.group(0)
+        url = match.group(0)
+        # Remove common trailing punctuation if present
+        url = url.rstrip('.,;:!?)')
+        return url
     return None
 
 

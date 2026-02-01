@@ -137,13 +137,13 @@ def extract_job_details_gemini(text: str, url: str = None) -> Dict:
         text_sample = text[:5000] if len(text) > 5000 else text
         
         # Improved extraction prompt with better instructions
+        url_line = f"\nJob URL: {url}" if url else ""
+        
         prompt = f"""
 You are an expert at extracting job posting information. Analyze the following job posting text carefully and extract ALL available information.
 
 Job Posting Text:
-{text_sample}
-
-Job URL (if available): {url if url else 'Not provided'}
+{text_sample}{url_line}
 
 Extract the following information with HIGH ACCURACY:
 
