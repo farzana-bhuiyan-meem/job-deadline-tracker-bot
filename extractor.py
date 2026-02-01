@@ -111,15 +111,234 @@ def extract_deadline_regex(text: str) -> Optional[datetime]:
     return None
 
 
+def _extract_company(model, text: str) -> str:
+    """Extract company name using focused prompt."""
+    prompt = f"""
+Look at this job posting and extract ONLY the company name.
+
+Job Posting:
+{text}
+
+Instructions:
+- Look for company name at the top, in headers, or near "Company:", "Organization:", "Join", "About us:"
+- Check email addresses (e.g., hr@companyname.com means company is "CompanyName")
+- Look in footer or signature
+- Return ONLY the company name, nothing else
+- If you cannot find it, return the word "null"
+
+Examples:
+- "Acme Corporation is hiring" → Acme Corporation
+- "Email: jobs@techcorp.com" → TechCorp
+- "About XYZ Limited" → XYZ Limited
+
+Company name:"""
+    
+    try:
+        response = model.generate_content(prompt)
+        result = response.text.strip()
+        
+        # Clean up response
+        if result.lower() == 'null' or not result or len(result) > 100:
+            logger.info("Company extraction returned null or invalid")
+            return None
+        
+        logger.info(f"Extracted company: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Company extraction failed: {e}")
+        return None
+
+
+def _extract_position(model, text: str) -> str:
+    """Extract job position using focused prompt."""
+    prompt = f"""
+Look at this job posting and extract ONLY the job title/position.
+
+Job Posting:
+{text}
+
+Instructions:
+- Look for "Job Title:", "Position:", "Role:", "Vacancy:", "Hiring for:", "We are looking for"
+- Usually appears at the very top or in the first few lines
+- Return ONLY the job title, nothing else
+- If you cannot find it, return the word "null"
+
+Examples:
+- "Software Engineer - Full Stack" → Software Engineer - Full Stack
+- "We are hiring: Marketing Manager" → Marketing Manager
+- "Position: Data Analyst Intern" → Data Analyst Intern
+
+Job title:"""
+    
+    try:
+        response = model.generate_content(prompt)
+        result = response.text.strip()
+        
+        # Clean up response
+        if result.lower() == 'null' or not result or len(result) > 150:
+            logger.info("Position extraction returned null or invalid")
+            return None
+        
+        logger.info(f"Extracted position: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Position extraction failed: {e}")
+        return None
+
+
+def _extract_location(model, text: str) -> str:
+    """Extract location using focused prompt."""
+    prompt = f"""
+Look at this job posting and extract ONLY the work location.
+
+Job Posting:
+{text}
+
+Instructions:
+- Look for "Location:", "Office:", "Workplace:", "Job Location:", "Work from"
+- Look for city names like Dhaka, Chittagong, Sylhet, Khulna, etc.
+- Look for area names like Gulshan, Banani, Dhanmondi, Niketon, etc.
+- Include "Remote" or "Work from home" if mentioned
+- Return ONLY the location, nothing else
+- If you cannot find it, return the word "null"
+
+Examples:
+- "Location: Dhaka, Bangladesh" → Dhaka, Bangladesh
+- "Office: Gulshan 2, Dhaka" → Gulshan 2, Dhaka
+- "Remote work" → Remote
+
+Location:"""
+    
+    try:
+        response = model.generate_content(prompt)
+        result = response.text.strip()
+        
+        # Clean up response
+        if result.lower() == 'null' or not result or len(result) > 100:
+            logger.info("Location extraction returned null or invalid")
+            return None
+        
+        logger.info(f"Extracted location: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Location extraction failed: {e}")
+        return None
+
+
+def _extract_salary(model, text: str) -> str:
+    """Extract salary using focused prompt."""
+    prompt = f"""
+Look at this job posting and extract ONLY the salary information.
+
+Job Posting:
+{text}
+
+Instructions:
+- Look for "Salary:", "Compensation:", "Pay:", "Monthly Salary:", "Package:"
+- Look for currency symbols: BDT, USD, $, ৳, Tk
+- Look for numbers followed by these keywords
+- Include the full salary range if given
+- Return ONLY the salary info, nothing else
+- If you cannot find it, return the word "null"
+
+Examples:
+- "Salary: 50,000 BDT per month" → 50,000 BDT per month
+- "Monthly: ৳40,000 - ৳60,000" → ৳40,000 - ৳60,000
+- "Compensation: $800/month" → $800/month
+
+Salary:"""
+    
+    try:
+        response = model.generate_content(prompt)
+        result = response.text.strip()
+        
+        # Clean up response
+        if result.lower() == 'null' or not result or len(result) > 100:
+            logger.info("Salary extraction returned null or invalid")
+            return None
+        
+        logger.info(f"Extracted salary: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Salary extraction failed: {e}")
+        return None
+
+
+def _extract_deadline(model, text: str) -> str:
+    """Extract deadline using focused prompt."""
+    prompt = f"""
+Look at this job posting and extract ONLY the application deadline date.
+
+Job Posting:
+{text}
+
+Instructions:
+- Look for "Deadline:", "Apply by:", "Last date:", "Applications close:", "Valid till:"
+- Return the date in YYYY-MM-DD format if possible
+- If you cannot find a deadline, return the word "null"
+
+Examples:
+- "Deadline: February 15, 2026" → 2026-02-15
+- "Apply by 10th March 2026" → 2026-03-10
+- "Last date: 05/02/2026" → 2026-02-05
+
+Deadline (YYYY-MM-DD):"""
+    
+    try:
+        response = model.generate_content(prompt)
+        result = response.text.strip()
+        
+        # Clean up response
+        if result.lower() == 'null' or not result or len(result) > 50:
+            logger.info("Deadline extraction returned null or invalid")
+            return None
+        
+        logger.info(f"Extracted deadline: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Deadline extraction failed: {e}")
+        return None
+
+
+def _extract_description(model, text: str) -> str:
+    """Extract brief job description."""
+    prompt = f"""
+Look at this job posting and write a ONE sentence summary (max 200 characters).
+
+Job Posting:
+{text}
+
+Instructions:
+- Summarize what the job is about in 1 sentence
+- Focus on key responsibilities or role
+- Keep it under 200 characters
+- If you cannot summarize, return the word "null"
+
+Summary:"""
+    
+    try:
+        response = model.generate_content(prompt)
+        result = response.text.strip()
+        
+        # Clean up response
+        if result.lower() == 'null' or not result or len(result) > 250:
+            logger.info("Description extraction returned null or invalid")
+            return None
+        
+        # Truncate if too long
+        if len(result) > 200:
+            result = result[:197] + "..."
+        
+        logger.info(f"Extracted description: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Description extraction failed: {e}")
+        return None
+
+
 def extract_job_details_gemini(text: str, url: str = None) -> Dict:
     """
-    Use Gemini API to extract job details including:
-    - company_name
-    - position
-    - deadline (if not found by regex)
-    - salary
-    - location
-    - description_summary
+    Use Gemini API to extract job details using multi-pass strategy.
     
     Args:
         text: Job posting text
@@ -135,99 +354,62 @@ def extract_job_details_gemini(text: str, url: str = None) -> Dict:
         return _get_default_job_data(url)
     
     try:
+        # Initialize Gemini model
         model = genai.GenerativeModel(config.GEMINI_MODEL)
+        logger.info(f"Initializing Gemini model: {config.GEMINI_MODEL}")
         
-        # Limit text length to avoid token limits
+        # Limit text length
         text_sample = text[:5000] if len(text) > 5000 else text
         
-        # Improved extraction prompt with better instructions
-        url_line = f"\nJob URL: {url}" if url else ""
+        # Initialize result dict
+        job_data = {
+            'company': None,
+            'position': None,
+            'deadline': None,
+            'salary': None,
+            'location': None,
+            'description': None,
+            'url': url
+        }
         
-        prompt = f"""
-You are an expert at extracting job posting information. Analyze the following job posting text carefully and extract ALL available information.
-
-Job Posting Text:
-{text_sample}{url_line}
-
-Extract the following information with HIGH ACCURACY:
-
-1. **Company Name**: Look for company name, organization name, employer name. Check near phrases like "Company:", "About us:", "Join our team at", email domains (@company.com), footer text, etc.
-
-2. **Job Title/Position**: Look for "Job Title:", "Position:", "Role:", "Hiring for:", "Vacancy:", or similar. This is usually prominent at the top.
-
-3. **Application Deadline**: Look for "Deadline:", "Apply by:", "Last date:", "Applications close:", "Valid till:", or any date mentioned with deadline context. Return in YYYY-MM-DD format.
-
-4. **Salary/Compensation**: Look for "Salary:", "Compensation:", "Pay:", "BDT", "USD", "$", "৳", "Tk", monthly/yearly amounts, salary ranges. Include currency and full details found.
-
-5. **Location**: Look for "Location:", "Office:", "Workplace:", city names like "Dhaka", "Remote", "Work from home", area names like "Gulshan", "Banani", "Niketon", etc.
-
-6. **Brief Description**: Summarize the key responsibilities or job description in 1-2 sentences (max 200 characters).
-
-IMPORTANT INSTRUCTIONS:
-- Be thorough and check the ENTIRE text carefully
-- Even if a field isn't clearly labeled, try to infer it from context
-- For company name: check email addresses (e.g., "contact@helium.com" → likely "Helium" or "Helium Bangladesh")
-- Return actual values found in the text, not generic placeholders
-- Only return null if the information is genuinely not present anywhere in the text
-- Be smart about context - if you see "HR Intern at Helium Bangladesh", extract both position and company
-
-Return ONLY valid JSON in this exact format (no markdown, no explanation):
-{{
-  "company": "exact company name found or null",
-  "position": "exact job title found or null",
-  "deadline": "YYYY-MM-DD or null",
-  "salary": "full salary details with currency or null",
-  "location": "location details or null",
-  "description": "brief summary or null"
-}}
-
-Do not include any text outside the JSON block.
-"""
+        # PASS 1: Extract company name
+        job_data['company'] = _extract_company(model, text_sample)
         
-        response = model.generate_content(prompt)
-        response_text = response.text.strip()
+        # PASS 2: Extract position
+        job_data['position'] = _extract_position(model, text_sample)
         
-        # Clean response text (remove markdown code blocks if present)
-        if response_text.startswith("```"):
-            response_text = re.sub(r'^```(?:json)?\n?', '', response_text)
-            response_text = re.sub(r'\n?```$', '', response_text)
+        # PASS 3: Extract location
+        job_data['location'] = _extract_location(model, text_sample)
         
-        # Parse JSON response
-        try:
-            job_data = json.loads(response_text)
-            logger.info("Successfully extracted job details with Gemini API")
-            logger.info(f"Extracted data: {job_data}")
-            
-            # Parse deadline if present
-            if job_data.get('deadline') and job_data['deadline'] != 'null':
-                try:
-                    deadline_str = job_data['deadline']
-                    deadline = dateparser.parse(
-                        deadline_str,
-                        settings={
-                            'TIMEZONE': str(config.TIMEZONE),
-                            'RETURN_AS_TIMEZONE_AWARE': True
-                        }
-                    )
-                    job_data['deadline'] = deadline
-                except Exception as e:
-                    logger.warning(f"Failed to parse Gemini deadline: {str(e)}")
-                    job_data['deadline'] = None
-            else:
+        # PASS 4: Extract salary
+        job_data['salary'] = _extract_salary(model, text_sample)
+        
+        # PASS 5: Extract deadline (if not already found by regex)
+        deadline_str = _extract_deadline(model, text_sample)
+        if deadline_str:
+            try:
+                deadline = dateparser.parse(
+                    deadline_str,
+                    settings={
+                        'TIMEZONE': str(config.TIMEZONE),
+                        'RETURN_AS_TIMEZONE_AWARE': True,
+                        'PREFER_DATES_FROM': 'future'
+                    }
+                )
+                job_data['deadline'] = deadline
+            except:
                 job_data['deadline'] = None
-            
-            # Add URL to job data if provided
-            if url:
-                job_data['url'] = url
-            
-            return job_data
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse Gemini JSON response: {str(e)}")
-            logger.error(f"Response text: {response_text}")
-            return _get_default_job_data(url)
-    
+        
+        # PASS 6: Extract description
+        job_data['description'] = _extract_description(model, text_sample)
+        
+        logger.info(f"Extraction complete: {job_data}")
+        return job_data
+        
     except Exception as e:
         logger.error(f"Gemini API extraction failed: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return _get_default_job_data(url)
 
 
