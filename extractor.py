@@ -15,6 +15,9 @@ import config
 DEFAULT_COMPANY = 'Unknown Company'
 DEFAULT_POSITION = 'Unknown Position'
 
+# Maximum length for extracted salary text
+MAX_SALARY_TEXT_LENGTH = 150
+
 # Import Gemini API with warning suppression
 import warnings
 with warnings.catch_warnings():
@@ -292,7 +295,7 @@ def extract_salary_regex(text: str) -> Optional[str]:
             # Clean up
             salary = re.sub(r'\s+', ' ', salary)
             # Basic validation: contains number or "Negotiable"
-            if re.search(r'\d|negotiable', salary, re.IGNORECASE) and len(salary) < 150:
+            if re.search(r'\d|negotiable', salary, re.IGNORECASE) and len(salary) < MAX_SALARY_TEXT_LENGTH:
                 logger.info(f"Regex extracted salary (labeled): {salary}")
                 return salary
     
@@ -302,10 +305,12 @@ def extract_salary_regex(text: str) -> Optional[str]:
     # "BDT 50,000-60,000 (Monthly)"
     # "$800-1000/month"
     currency_first_patterns = [
-        # With thousand separators (commas)
+        # Range: Currency + number + (k)? + separator + number + (k)? + optional suffix
+        # Examples: "Tk. 22,000 - 30,000 per month", "৳25k-35k"
         r'((?:Tk\.?|৳|BDT|USD|\$)\s*[\d,]+(?:k|K)?\s*(?:[-–to]+)\s*[\d,]+(?:k|K)?(?:\s*(?:BDT|Tk|৳|USD|\$))?(?:\s*(?:per month|monthly|/month|\(Monthly\)|\(Negotiable\)))?)',
         
-        # Single amount with currency first
+        # Single amount: Currency + number + (k)? + (+)? + optional suffix
+        # Examples: "Tk 50000+", "BDT 50k per month"
         r'((?:Tk\.?|৳|BDT|USD|\$)\s*[\d,]+(?:k|K)?(?:\+)?(?:\s*(?:per month|monthly|/month|\(Monthly\)|\(Negotiable\)))?)',
     ]
     
@@ -316,7 +321,7 @@ def extract_salary_regex(text: str) -> Optional[str]:
             # Clean up whitespace
             salary = re.sub(r'\s+', ' ', salary)
             # Validate: reasonable length and contains digits
-            if re.search(r'\d', salary) and 3 < len(salary) < 150:
+            if re.search(r'\d', salary) and 3 < len(salary) < MAX_SALARY_TEXT_LENGTH:
                 logger.info(f"Regex extracted salary (currency first): {salary}")
                 return salary
     
@@ -325,10 +330,12 @@ def extract_salary_regex(text: str) -> Optional[str]:
     # "25000-35000 Tk"
     # "30k-40k BDT/month"
     amount_first_patterns = [
-        # Range with commas
+        # Range: number + (k)? + separator + number + (k)? + currency + optional suffix
+        # Examples: "22,000 - 30,000 BDT", "30k-40k BDT/month"
         r'([\d,]+(?:k|K)?\s*(?:[-–to]+)\s*[\d,]+(?:k|K)?\s*(?:BDT|Tk\.?|৳|USD|\$)(?:\s*(?:per month|monthly|/month|\(Monthly\)|\(Negotiable\)))?)',
         
-        # Single amount
+        # Single amount: number + (k)? + (+)? + currency + optional suffix
+        # Examples: "50000+ BDT", "50k Tk per month"
         r'([\d,]+(?:k|K)?(?:\+)?\s*(?:BDT|Tk\.?|৳|USD|\$)(?:\s*(?:per month|monthly|/month|\(Monthly\)|\(Negotiable\)))?)',
     ]
     
@@ -338,7 +345,7 @@ def extract_salary_regex(text: str) -> Optional[str]:
             salary = match.group(1).strip()
             salary = re.sub(r'\s+', ' ', salary)
             # Additional validation: must have reasonable digits
-            if re.search(r'\d{2,}', salary) and 3 < len(salary) < 150:
+            if re.search(r'\d{2,}', salary) and 3 < len(salary) < MAX_SALARY_TEXT_LENGTH:
                 logger.info(f"Regex extracted salary (amount first): {salary}")
                 return salary
     
@@ -359,12 +366,10 @@ def extract_salary_regex(text: str) -> Optional[str]:
             return salary
     
     # Pattern 5: "Negotiable" or "As per company policy"
-    if re.search(r'\b(?:Salary|Compensation).*?(?:Negotiable|As per company policy|Competitive)\b', text, re.IGNORECASE | re.DOTALL):
-        # Make sure it's not part of a longer range
-        negotiable_match = re.search(r'(?:Salary|Compensation)[:\s]+(Negotiable|As per company policy|Competitive)', text, re.IGNORECASE)
-        if negotiable_match:
-            logger.info(f"Regex extracted salary (negotiable): {negotiable_match.group(1)}")
-            return negotiable_match.group(1)
+    negotiable_match = re.search(r'(?:Salary|Compensation)[:\s]+(Negotiable|As per company policy|Competitive)', text, re.IGNORECASE)
+    if negotiable_match:
+        logger.info(f"Regex extracted salary (negotiable): {negotiable_match.group(1)}")
+        return negotiable_match.group(1)
     
     # Pattern 6: Standalone amount ranges (last resort, be conservative)
     # Only match clear salary-like numbers (4-6 digits with separator or k suffix)
