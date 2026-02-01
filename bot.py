@@ -31,7 +31,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Constants for user input matching
-SKIP_URL_KEYWORDS = ['no', 'skip', 'n', 'none', 'no link', 'nope']
+# Keywords that indicate user wants to skip providing URL
+SKIP_URL_KEYWORDS = ['no', 'skip', 'none', 'no link', 'nope', 'na', 'n/a']
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -407,9 +408,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['pending_job_data'] = None
         
         # Check if user wants to skip providing URL
-        # Use startswith for more flexible matching
-        message_lower = message_text.lower()
-        wants_to_skip = any(message_lower.startswith(keyword) for keyword in SKIP_URL_KEYWORDS)
+        # Check if the message is a common "skip" phrase
+        message_lower = message_text.lower().strip()
+        
+        # Check for exact matches or word-based matches
+        wants_to_skip = (
+            message_lower in SKIP_URL_KEYWORDS or  # Exact match
+            message_lower == 'n' or  # Single 'n' is skip
+            message_lower.startswith('skip ') or  # "skip something"
+            message_lower.startswith('no ') or  # "no thanks", "no link", etc.
+            message_lower.startswith('none') or  # "none available"
+            message_lower.startswith('nope')  # "nope thanks"
+        )
         
         if wants_to_skip:
             logger.info("User skipped providing URL")
