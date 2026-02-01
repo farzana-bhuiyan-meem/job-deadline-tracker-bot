@@ -359,7 +359,7 @@ async def save_and_confirm_job(update: Update, context: ContextTypes.DEFAULT_TYP
     
     # Add warning about missing fields if needed
     if warn_user_about_fields:
-        confirmation_message += "\n\n⚠️ **Note:** Both company and position were unclear. Please update them in your sheet."
+        confirmation_message += "\n\n⚠️ **Note:** Company and position were not found. Please update 'Unknown Company' and 'Unknown Position' in your sheet."
     
     # Create inline keyboard
     keyboard = []
@@ -406,8 +406,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['waiting_for_job_url'] = False
         context.user_data['pending_job_data'] = None
         
-        # Check if user provided a URL or skipped
-        if message_text.lower() in SKIP_URL_KEYWORDS:
+        # Check if user wants to skip providing URL
+        # Use startswith for more flexible matching
+        message_lower = message_text.lower()
+        wants_to_skip = any(message_lower.startswith(keyword) for keyword in SKIP_URL_KEYWORDS)
+        
+        if wants_to_skip:
             logger.info("User skipped providing URL")
             processing_msg = await update.message.reply_text("✅ Saving job without URL...")
             await save_and_confirm_job(update, context, pending_job_data, processing_msg)

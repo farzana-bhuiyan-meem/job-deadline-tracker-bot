@@ -54,9 +54,15 @@ def format_job_message(job_data: Dict) -> str:
     Returns:
         Formatted message string
     """
-    # Get values with proper defaults
-    company = job_data.get('company') or 'Unknown Company'
-    position = job_data.get('position') or 'Unknown Position'
+    # Get values - use explicit None checks for proper handling
+    company = job_data.get('company')
+    if company is None or company == '':
+        company = 'Unknown Company'
+    
+    position = job_data.get('position')
+    if position is None or position == '':
+        position = 'Unknown Position'
+    
     deadline = job_data.get('deadline')
     salary = job_data.get('salary')
     location = job_data.get('location')
