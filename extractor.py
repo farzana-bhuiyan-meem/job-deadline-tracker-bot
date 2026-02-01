@@ -5,6 +5,7 @@ Job detail extraction using regex patterns and Google Gemini API.
 import logging
 import re
 import json
+import traceback
 from datetime import datetime
 from typing import Optional, Dict
 import dateparser
@@ -397,7 +398,7 @@ def extract_job_details_gemini(text: str, url: str = None) -> Dict:
                     }
                 )
                 job_data['deadline'] = deadline
-            except:
+            except Exception:
                 job_data['deadline'] = None
         
         # PASS 6: Extract description
@@ -408,7 +409,6 @@ def extract_job_details_gemini(text: str, url: str = None) -> Dict:
         
     except Exception as e:
         logger.error(f"Gemini API extraction failed: {str(e)}")
-        import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
         return _get_default_job_data(url)
 
