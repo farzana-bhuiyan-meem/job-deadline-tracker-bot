@@ -152,7 +152,7 @@ def extract_company_regex(text: str) -> Optional[str]:
             # Clean up
             company = re.sub(r'\s+', ' ', company)  # Normalize whitespace
             # Sanity check: reasonable length
-            if 3 < len(company) < 100 and not company.lower() in ['job', 'position', 'role']:
+            if 3 < len(company) < 100 and company.lower() not in ['job', 'position', 'role']:
                 logger.info(f"Regex extracted company: {company}")
                 return company
     
