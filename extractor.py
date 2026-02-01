@@ -112,6 +112,197 @@ def extract_deadline_regex(text: str) -> Optional[datetime]:
     return None
 
 
+def extract_company_regex(text: str) -> Optional[str]:
+    """
+    Extract company name using regex patterns.
+    Fallback when Gemini extraction fails.
+    
+    Args:
+        text: Job posting text
+        
+    Returns:
+        Company name string or None
+    """
+    logger.info("Attempting to extract company using regex patterns")
+    
+    patterns = [
+        # "Company: Acme Corporation"
+        r'Company:\s*([A-Z][A-Za-z\s&.,()]+?)(?:\n|is|hiring|looking|Job|$)',
+        
+        # "Organization: Tech Solutions"
+        r'Organization:\s*([A-Z][A-Za-z\s&.,()]+?)(?:\n|is|Job|$)',
+        
+        # "About XYZ Limited" or "About Cityscape International Ltd"
+        r'About\s+(?:Us\s+)?([A-Z][A-Za-z\s&.,()]+?(?:Ltd|Limited|Inc|Corporation|Group|International|Bangladesh))(?:\n|is|Job|$)',
+        
+        # "Cityscape International Ltd is hiring"
+        r'([A-Z][A-Za-z\s&.,()]+?(?:Ltd|Limited|Inc|Corporation|Group|International))\s+is\s+(?:hiring|looking|seeking)',
+        
+        # "Join Helium Bangladesh"
+        r'Join\s+(?:our team at\s+)?([A-Z][A-Za-z\s&.,()]+?(?:Ltd|Limited|Inc|Corporation|Group|International|Bangladesh))(?:\n|!|\.|$)',
+        
+        # Look for company names ending with common suffixes
+        r'([A-Z][A-Za-z\s&.,()]+?(?:Limited|Ltd|Inc|Corporation|Group|International|Bangladesh))\s*(?:\n|is|hiring|$)',
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+        if match:
+            company = match.group(1).strip()
+            # Clean up
+            company = re.sub(r'\s+', ' ', company)  # Normalize whitespace
+            # Sanity check: reasonable length
+            if 3 < len(company) < 100 and not company.lower() in ['job', 'position', 'role']:
+                logger.info(f"Regex extracted company: {company}")
+                return company
+    
+    logger.info("No company found using regex patterns")
+    return None
+
+
+def extract_position_regex(text: str) -> Optional[str]:
+    """
+    Extract job position/title using regex patterns.
+    Fallback when Gemini extraction fails.
+    
+    Args:
+        text: Job posting text
+        
+    Returns:
+        Position string or None
+    """
+    logger.info("Attempting to extract position using regex patterns")
+    
+    patterns = [
+        # "Position: Software Engineer"
+        r'Position:\s*([A-Z][A-Za-z\s\-–&/(),]+?)(?:\n|Job|Employment|Work|$)',
+        
+        # "Job Title: Marketing Manager"
+        r'Job Title:\s*([A-Z][A-Za-z\s\-–&/(),]+?)(?:\n|Job|Employment|Work|$)',
+        
+        # "Role: Data Analyst"
+        r'Role:\s*([A-Z][A-Za-z\s\-–&/(),]+?)(?:\n|Job|Employment|Work|$)',
+        
+        # "Hiring for: HR Intern"
+        r'Hiring for:\s*([A-Z][A-Za-z\s\-–&/(),]+?)(?:\n|Job|to|$)',
+        
+        # "Vacancy: Senior Developer"
+        r'Vacancy:\s*([A-Z][A-Za-z\s\-–&/(),]+?)(?:\n|Job|Employment|$)',
+        
+        # "We are looking for a Software Engineer"
+        r'looking for\s+(?:a|an)\s+([A-Z][A-Za-z\s\-–&/(),]+?)(?:\n|to|with|who|$)',
+        
+        # "is looking for IT & Odoo Software Intern" (from your example)
+        r'is looking for\s+([A-Z][A-Za-z\s\-–&/(),]+?)(?:\n|Job|to|$)',
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+        if match:
+            position = match.group(1).strip()
+            # Clean up
+            position = re.sub(r'\s+', ' ', position)
+            # Sanity check
+            if 3 < len(position) < 150:
+                logger.info(f"Regex extracted position: {position}")
+                return position
+    
+    logger.info("No position found using regex patterns")
+    return None
+
+
+def extract_location_regex(text: str) -> Optional[str]:
+    """
+    Extract job location using regex patterns.
+    Fallback when Gemini extraction fails.
+    
+    Args:
+        text: Job posting text
+        
+    Returns:
+        Location string or None
+    """
+    logger.info("Attempting to extract location using regex patterns")
+    
+    # First try labeled locations
+    labeled_patterns = [
+        r'(?:Location|Job Location|Workplace|Office|Work Location):\s*([A-Za-z\s,\-()0-9]+?)(?:\n|\||Job|Employment|Salary|$)',
+    ]
+    
+    for pattern in labeled_patterns:
+        match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+        if match:
+            location = match.group(1).strip()
+            # Clean up
+            location = re.sub(r'\s+', ' ', location)
+            if 3 < len(location) < 100:
+                logger.info(f"Regex extracted location (labeled): {location}")
+                return location
+    
+    # Try to find Bangladesh cities
+    city_pattern = r'((?:Dhaka|Chittagong|Sylhet|Khulna|Rajshahi|Rangpur|Barisal|Mymensingh|Gazipur|Narayanganj)(?:\s*\([A-Za-z\s0-9]+\))?)'
+    match = re.search(city_pattern, text, re.IGNORECASE)
+    if match:
+        city = match.group(1).strip()
+        logger.info(f"Regex extracted location (city): {city}")
+        return city
+    
+    # Try to find Dhaka areas
+    area_pattern = r'((?:Gulshan|Banani|Dhanmondi|Niketon|Motijheel|Kawran Bazar|Mohakhali|Uttara|Mirpur|Badda|Rampura|Tejgaon|Farmgate)(?:\s*\d+)?)'
+    match = re.search(area_pattern, text, re.IGNORECASE)
+    if match:
+        area = match.group(1).strip()
+        logger.info(f"Regex extracted location (area): {area}")
+        return area
+    
+    # Check for remote work
+    if re.search(r'\b(remote|work from home|wfh)\b', text, re.IGNORECASE):
+        logger.info("Regex extracted location: Remote")
+        return "Remote"
+    
+    logger.info("No location found using regex patterns")
+    return None
+
+
+def extract_salary_regex(text: str) -> Optional[str]:
+    """
+    Extract salary information using regex patterns.
+    Fallback when Gemini extraction fails.
+    
+    Args:
+        text: Job posting text
+        
+    Returns:
+        Salary string or None
+    """
+    logger.info("Attempting to extract salary using regex patterns")
+    
+    patterns = [
+        # "Salary: 50,000 BDT" or "Monthly Salary: BDT 40,000"
+        r'(?:Salary|Compensation|Monthly Salary|Package):\s*((?:BDT|Tk|৳|USD|\$)?\s*[\d,]+(?:\s*(?:BDT|Tk|৳|USD|\$))?(?:\s*[\-–to]+\s*(?:BDT|Tk|৳|USD|\$)?\s*[\d,]+(?:\s*(?:BDT|Tk|৳|USD|\$))?)?)',
+        
+        # "BDT 50,000" or "৳40,000 - ৳60,000"
+        r'((?:BDT|Tk|৳|USD|\$)\s*[\d,]+(?:\s*[\-–to]+\s*(?:BDT|Tk|৳|USD|\$)?\s*[\d,]+)?(?:\s*(?:per month|monthly|/month))?)',
+        
+        # "50,000 BDT per month"
+        r'([\d,]+\s*(?:BDT|Tk|৳|USD|\$)(?:\s*[\-–to]+\s*[\d,]+\s*(?:BDT|Tk|৳|USD|\$))?(?:\s*(?:per month|monthly|/month))?)',
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+        if match:
+            salary = match.group(1).strip()
+            # Clean up whitespace
+            salary = re.sub(r'\s+', ' ', salary)
+            # Sanity check: contains numbers
+            if re.search(r'\d', salary) and len(salary) < 100:
+                logger.info(f"Regex extracted salary: {salary}")
+                return salary
+    
+    logger.info("No salary found using regex patterns")
+    return None
+
+
 def _extract_company(model, text: str) -> str:
     """Extract company name using focused prompt."""
     prompt = f"""
@@ -340,6 +531,7 @@ Summary:"""
 def extract_job_details_gemini(text: str, url: str = None) -> Dict:
     """
     Use Gemini API to extract job details using multi-pass strategy.
+    Falls back to regex patterns if Gemini extraction fails.
     
     Args:
         text: Job posting text
@@ -375,15 +567,27 @@ def extract_job_details_gemini(text: str, url: str = None) -> Dict:
         
         # PASS 1: Extract company name
         job_data['company'] = _extract_company(model, text_sample)
+        # Fallback to regex if Gemini failed
+        if not job_data['company']:
+            job_data['company'] = extract_company_regex(text_sample)
         
         # PASS 2: Extract position
         job_data['position'] = _extract_position(model, text_sample)
+        # Fallback to regex if Gemini failed
+        if not job_data['position']:
+            job_data['position'] = extract_position_regex(text_sample)
         
         # PASS 3: Extract location
         job_data['location'] = _extract_location(model, text_sample)
+        # Fallback to regex if Gemini failed
+        if not job_data['location']:
+            job_data['location'] = extract_location_regex(text_sample)
         
         # PASS 4: Extract salary
         job_data['salary'] = _extract_salary(model, text_sample)
+        # Fallback to regex if Gemini failed
+        if not job_data['salary']:
+            job_data['salary'] = extract_salary_regex(text_sample)
         
         # PASS 5: Extract deadline (if not already found by regex)
         deadline_str = _extract_deadline(model, text_sample)
@@ -401,7 +605,7 @@ def extract_job_details_gemini(text: str, url: str = None) -> Dict:
             except Exception:
                 job_data['deadline'] = None
         
-        # PASS 6: Extract description
+        # PASS 6: Extract description (Gemini only, no regex fallback makes sense here)
         job_data['description'] = _extract_description(model, text_sample)
         
         logger.info(f"Extraction complete: {job_data}")
