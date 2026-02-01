@@ -224,11 +224,16 @@ def extract_location_regex(text: str) -> Optional[str]:
     """
     logger.info("Attempting to extract location using regex patterns")
     
+    # Bangladesh cities for consistent pattern matching
+    BANGLADESH_CITIES = ['Dhaka', 'Chittagong', 'Sylhet', 'Khulna', 'Rajshahi', 'Rangpur', 'Barisal', 'Mymensingh', 'Gazipur', 'Narayanganj']
+    cities_pattern = '|'.join(BANGLADESH_CITIES)
+    
     # First try labeled locations (captures full address)
     labeled_patterns = [
         # "Location: Police Park, House #05, Road #10, Block D, Bandaree, Khilgaon, Dhaka 1219"
         # Captures everything until double newline, or newline followed by capital letter, or end of text
-        r'(?:Location|Job Location|Workplace|Office|Work Location):\s*([^\n]+?)(?:\n\n|\n[A-Z]|$)',
+        # Using greedy matching (no ?) to capture the full line
+        r'(?:Location|Job Location|Workplace|Office|Work Location):\s*([^\n]+)(?:\n\n|\n[A-Z]|$)',
         
         # Try simpler version if above doesn't work - captures until end of line
         r'(?:Location|Job Location|Workplace|Office|Work Location):\s*(.+?)(?:\n|$)',
@@ -240,18 +245,20 @@ def extract_location_regex(text: str) -> Optional[str]:
             location = match.group(1).strip()
             # Clean up
             location = re.sub(r'\s+', ' ', location)  # Normalize whitespace
-            # Remove trailing junk like "Job", "Employment", etc. if they appear
+            # Remove pipe-separated trailing content
             location = re.sub(r'\s*\|.*$', '', location)
-            location = re.sub(r'\s*(Job|Employment|Salary|Deadline).*$', '', location, flags=re.IGNORECASE)
+            # Only remove keywords if they look like metadata (followed by colon or are standalone at end)
+            # This prevents removing legitimate place names like "Employment Plaza"
+            location = re.sub(r'\s*\b(Job|Employment|Salary|Deadline)\s*:.*$', '', location, flags=re.IGNORECASE)
             
             # Sanity check - must contain at least some text
             if 3 < len(location) < 200:
                 logger.info(f"Regex extracted location (labeled): {location}")
                 return location
     
-    # If labeled pattern fails, try to find city + surrounding context
+    # If labeled pattern fails, try to find city + surrounding context (limited to 100 chars before city)
     # Look for "Dhaka" with surrounding text (address components before and after)
-    context_pattern = r'([A-Za-z\s,#\-()0-9]+(?:Dhaka|Chittagong|Sylhet|Khulna|Rajshahi)[A-Za-z\s,#\-()0-9]*)'
+    context_pattern = f'([A-Za-z\\s,#\\-()0-9]{{0,100}}(?:{cities_pattern})[A-Za-z\\s,#\\-()0-9]*)'
     match = re.search(context_pattern, text, re.IGNORECASE)
     if match:
         location = match.group(1).strip()
@@ -265,7 +272,7 @@ def extract_location_regex(text: str) -> Optional[str]:
             return location
     
     # Fallback: Try to find just Bangladesh cities
-    city_pattern = r'((?:Dhaka|Chittagong|Sylhet|Khulna|Rajshahi|Rangpur|Barisal|Mymensingh|Gazipur|Narayanganj)(?:\s*\d+)?)'
+    city_pattern = f'((?:{cities_pattern})(?:\\s*\\d+)?)'
     match = re.search(city_pattern, text, re.IGNORECASE)
     if match:
         city = match.group(1).strip()
