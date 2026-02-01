@@ -54,8 +54,9 @@ def format_job_message(job_data: Dict) -> str:
     Returns:
         Formatted message string
     """
-    company = job_data.get('company', 'Unknown Company')
-    position = job_data.get('position', 'Unknown Position')
+    # Get values with proper defaults
+    company = job_data.get('company') or 'Unknown Company'
+    position = job_data.get('position') or 'Unknown Position'
     deadline = job_data.get('deadline')
     salary = job_data.get('salary')
     location = job_data.get('location')
@@ -68,8 +69,9 @@ def format_job_message(job_data: Dict) -> str:
     message += f"💼 **Position:** {position}\n"
     
     if deadline:
-        deadline_str = deadline.strftime('%B %d, %Y') if hasattr(deadline, 'strftime') else str(deadline)
-        days_left = calculate_days_left(deadline) if hasattr(deadline, 'strftime') else None
+        # Use isinstance for proper type checking
+        deadline_str = deadline.strftime('%B %d, %Y') if isinstance(deadline, datetime) else str(deadline)
+        days_left = calculate_days_left(deadline) if isinstance(deadline, datetime) else None
         message += f"📅 **Deadline:** {deadline_str}"
         if days_left is not None:
             message += f" ({days_left} days left)"

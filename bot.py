@@ -30,6 +30,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Constants for user input matching
+SKIP_URL_KEYWORDS = ['no', 'skip', 'n', 'none', 'no link', 'nope']
+
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command."""
@@ -291,7 +294,7 @@ async def process_job_text(update: Update, context: ContextTypes.DEFAULT_TYPE, t
                 "This will help you apply to the job later.\n\n"
                 "Please send:\n"
                 "• The job URL/link, OR\n"
-                "• Type 'no' or 'skip' if you don't have it"
+                "• Reply 'no' or 'skip' if you don't have it"
             )
             return
         
@@ -321,13 +324,13 @@ async def save_and_confirm_job(update: Update, context: ContextTypes.DEFAULT_TYP
     has_company = job_data.get('company') not in [None, 'Unknown Company', '']
     has_position = job_data.get('position') not in [None, 'Unknown Position', '']
     
+    # Track if we need to warn the user about missing critical fields
+    warn_user_about_fields = False
+    
     if not has_company and not has_position:
-        # Neither company nor position found - warn user
+        # Neither company nor position found - will warn user after saving
         logger.warning("Both company and position missing in extraction")
-        await processing_msg.edit_text(
-            "⚠️ I had trouble extracting the company name and position.\n\n"
-            "The job has been added to your sheet, but you'll need to update these fields manually."
-        )
+        warn_user_about_fields = True
     elif not has_company or not has_position:
         # Only one is missing - that's okay, just log it
         logger.info(f"Missing: {'company' if not has_company else 'position'} (this is fine)")
@@ -353,6 +356,10 @@ async def save_and_confirm_job(update: Update, context: ContextTypes.DEFAULT_TYP
     logger.info("Job processed successfully")
     
     confirmation_message = utils.format_job_message(job_data)
+    
+    # Add warning about missing fields if needed
+    if warn_user_about_fields:
+        confirmation_message += "\n\n⚠️ **Note:** Both company and position were unclear. Please update them in your sheet."
     
     # Create inline keyboard
     keyboard = []
@@ -400,7 +407,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['pending_job_data'] = None
         
         # Check if user provided a URL or skipped
-        if message_text.lower() in ['no', 'skip', 'n', 'none', 'no link']:
+        if message_text.lower() in SKIP_URL_KEYWORDS:
             logger.info("User skipped providing URL")
             processing_msg = await update.message.reply_text("✅ Saving job without URL...")
             await save_and_confirm_job(update, context, pending_job_data, processing_msg)
