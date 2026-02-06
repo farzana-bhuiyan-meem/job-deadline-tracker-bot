@@ -15,8 +15,10 @@ import config
 DEFAULT_COMPANY = 'Unknown Company'
 DEFAULT_POSITION = 'Unknown Position'
 
-# Maximum length for extracted salary text
+# Maximum length for extracted text
 MAX_SALARY_TEXT_LENGTH = 150
+MAX_LOCATION_TEXT_LENGTH = 200
+MAX_COMPANY_TEXT_LENGTH = 100
 
 # Import Ollama for local LLM extraction
 logger = logging.getLogger(__name__)
@@ -444,7 +446,7 @@ Company name:"""
         result = response['response'].strip()
         
         # Clean up response
-        if result.lower() == 'null' or not result or len(result) > 100:
+        if result.lower() == 'null' or not result or len(result) > MAX_COMPANY_TEXT_LENGTH:
             logger.info("Company extraction returned null or invalid")
             return None
         
@@ -534,7 +536,7 @@ Location:"""
         )
         result = response['response'].strip()
         
-        if result.lower() == 'null' or not result or len(result) > 200:
+        if result.lower() == 'null' or not result or len(result) > MAX_LOCATION_TEXT_LENGTH:
             logger.info("Location extraction returned null or invalid")
             return None
         
@@ -555,12 +557,13 @@ Job Posting:
 
 Instructions:
 - Look for "Salary:", "Compensation:", "Pay:", "Monthly Salary:", "Package:"
-- Look for currency symbols: BDT, USD, $, ৳, Tk, Tk.
+- Look for currency symbols: BDT, USD, $, ৳, Tk, Tk. (note: Tk. includes the period)
 - Look for numbers followed by these keywords
 - Include the full salary range if given
 - Include suffixes like (Monthly), (Negotiable), per month, etc.
 - Return ONLY the salary info, nothing else
 - If you cannot find it, return the word "null"
+- If only "Negotiable" is mentioned without amounts, return just "Negotiable"
 
 Examples:
 - "Salary: 50,000 BDT per month" → 50,000 BDT per month
@@ -582,7 +585,7 @@ Salary:"""
         )
         result = response['response'].strip()
         
-        if result.lower() == 'null' or not result or len(result) > 100:
+        if result.lower() == 'null' or not result or len(result) > MAX_SALARY_TEXT_LENGTH:
             logger.info("Salary extraction returned null or invalid")
             return None
         
