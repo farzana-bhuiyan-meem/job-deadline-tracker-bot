@@ -18,7 +18,7 @@ A complete, production-ready **Job Deadline Tracker Telegram Bot** that automati
 - ✅ Jina AI Reader for web scraping
 - ✅ BeautifulSoup fallback for blocked sites
 - ✅ Regex + DateParser for deadline extraction (8+ patterns)
-- ✅ Google Gemini API for intelligent detail extraction
+- ✅ Ollama (Llama 3.2) for intelligent detail extraction
 - ✅ Extracts: company, position, deadline, salary, location, description
 - ✅ Handles multiple date formats including Bengali
 
@@ -44,7 +44,7 @@ A complete, production-ready **Job Deadline Tracker Telegram Bot** that automati
 job-deadline-tracker-bot/
 ├── bot.py                 # Main Telegram bot (388 lines)
 ├── scraper.py            # Web scraping with Jina AI (159 lines)
-├── extractor.py          # AI extraction with Gemini (287 lines)
+├── extractor.py          # AI extraction with Ollama (287 lines)
 ├── sheets.py             # Google Sheets integration (433 lines)
 ├── reminder.py           # Automated reminders (177 lines)
 ├── utils.py              # Helper functions (214 lines)
@@ -68,7 +68,7 @@ job-deadline-tracker-bot/
 
 ### Core Technologies Used
 - **python-telegram-bot 20.0+** - Telegram bot framework
-- **Google Gemini API** - AI-powered extraction
+- **Ollama (Llama 3.2)** - AI-powered extraction
 - **Jina AI Reader** - Web scraping (with BeautifulSoup fallback)
 - **dateparser** - Intelligent date parsing
 - **Google Sheets API** - Spreadsheet integration
@@ -87,7 +87,7 @@ job-deadline-tracker-bot/
 - 8+ regex patterns for deadline detection
 - Supports multiple formats (DD/MM/YYYY, Month DD YYYY, etc.)
 - Bengali text support
-- Falls back to Gemini if regex fails
+- Falls back to Ollama if regex fails
 
 #### Security
 - User ID verification (single-user mode)
@@ -115,7 +115,7 @@ All deployment options documented in `docs/DEPLOYMENT.md`.
 ## 💰 Cost: $0
 
 All services use free tiers:
-- Google Gemini: 60 requests/min free
+- Ollama: Unlimited (runs locally)
 - Jina AI Reader: 1,000 requests/day free
 - Google Sheets API: 500 requests/100s free
 - Telegram Bot API: Unlimited free
@@ -160,9 +160,9 @@ All services use free tiers:
 
 To use this bot, users need to:
 
-1. **Get API Keys** (30 minutes, one-time setup)
+1. **Get API Keys & Install Ollama** (30 minutes, one-time setup)
    - Telegram Bot Token from @BotFather
-   - Google Gemini API key
+   - Install Ollama with Llama 3.2 model
    - Google Sheets API credentials
    - Their Telegram User ID
 

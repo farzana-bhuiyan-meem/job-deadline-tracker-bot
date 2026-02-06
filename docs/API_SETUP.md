@@ -6,7 +6,7 @@ Complete step-by-step guide to obtain all required API keys and credentials.
 
 1. [Telegram Bot Token](#1-telegram-bot-token)
 2. [Telegram User ID](#2-telegram-user-id)
-3. [Google Gemini API Key](#3-google-gemini-api-key)
+3. [Ollama Setup (Local AI)](#3-ollama-setup-local-ai)
 4. [Google Sheets API Setup](#4-google-sheets-api-setup)
 5. [Jina AI API Key (Optional)](#5-jina-ai-api-key-optional)
 
@@ -102,46 +102,69 @@ TELEGRAM_USER_ID=123456789
 
 ---
 
-## 3. Google Gemini API Key
+## 3. Ollama Setup (Local AI)
 
-Google Gemini is used for AI-powered job detail extraction.
+Ollama runs locally on your computer - no API key needed!
 
 ### Step-by-Step Instructions
 
-**1. Visit Google AI Studio**
-   - Go to: [https://makersuite.google.com/app/apikey](https://makersuite.google.com/app/apikey)
-   - Sign in with your Google account
+**1. Download Ollama**
+   - Visit: [https://ollama.com/download](https://ollama.com/download)
+   - Download the installer for your operating system:
+     - Windows: Download and run the installer
+     - macOS: Download and install the app
+     - Linux: Run `curl -fsSL https://ollama.com/install.sh | sh`
 
-**2. Create API Key**
-   - Click "Create API Key" button
-   - Select "Create API key in new project" (or choose existing project)
+**2. Install Ollama**
+   - Run the downloaded installer
+   - Follow the installation prompts
+   - Ollama will start automatically after installation
 
-**3. Copy the Key**
-   - Your API key will be displayed
-   - It looks like: `AIzaSyA1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q`
-   - **Copy this key** immediately
-   - **⚠️ Keep it secure!** Treat it like a password
+**3. Pull Llama 3.2 Model**
+   - Open terminal/command prompt
+   - Run this command:
+     ```bash
+     ollama pull llama3.2
+     ```
+   - Wait for the model to download (~2GB, takes 2-10 minutes depending on internet speed)
 
-**4. (Optional) Restrict the Key**
-   - Click "Edit API key" (recommended for production)
-   - Add restriction: "Restrict key"
-   - Select "Generative Language API"
-   - Click "Save"
+**4. Verify It Works**
+   - Test Ollama by running:
+     ```bash
+     ollama run llama3.2 "Hello"
+     ```
+   - If it responds with a greeting, Ollama is working!
 
-### Free Tier Limits
+### Benefits of Using Ollama
 
-- **60 requests per minute**
-- **1,500 requests per day**
-- Completely free for personal use
+- ✅ **No API Key Required** - Works out of the box
+- ✅ **100% Private** - All data stays on your computer
+- ✅ **No Rate Limits** - Unlimited extractions
+- ✅ **Completely Free** - No ongoing costs
+- ✅ **Works Offline** - No internet required after model download
+- ✅ **No 404 Errors** - Runs locally, no API issues
 
-For typical usage (50 jobs/month), you'll use only ~50-100 requests/month.
+### System Requirements
 
-### What to do with the API key:
+- **Disk Space:** ~4GB for Llama 3.2 model
+- **RAM:** 8GB minimum (16GB recommended)
+- **OS:** Windows, macOS, or Linux
 
-Add to `.env` file:
-```env
-GEMINI_API_KEY=AIzaSyA1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q
-```
+### Troubleshooting
+
+**If Ollama doesn't start automatically:**
+- Windows: Run "Ollama" from Start menu
+- macOS: Open Ollama app from Applications
+- Linux: Run `ollama serve` in terminal
+
+**If model pull fails:**
+- Check your internet connection
+- Try again: `ollama pull llama3.2`
+- Make sure you have enough disk space
+
+### No Configuration Needed!
+
+Unlike API-based services, Ollama requires no configuration in `.env` file. The bot will automatically detect and use Ollama if it's running.
 
 ---
 
@@ -289,7 +312,7 @@ Before running the bot, verify you have:
 
 - [ ] Telegram Bot Token from @BotFather
 - [ ] Your Telegram User ID
-- [ ] Google Gemini API Key
+- [ ] Ollama installed with Llama 3.2 model
 - [ ] Google Sheets API enabled
 - [ ] Service Account created and JSON key downloaded
 - [ ] `credentials.json` file in project folder
@@ -306,8 +329,8 @@ Here's what your final `.env` file should look like:
 TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
 TELEGRAM_USER_ID=123456789
 
-# Google Gemini API
-GEMINI_API_KEY=AIzaSyA1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q
+# Ollama runs locally - no API key needed!
+# Just make sure Ollama is installed and running
 
 # Google Sheets Configuration
 GOOGLE_SHEETS_CREDENTIALS=credentials.json
@@ -335,9 +358,9 @@ If you're stuck on any step:
 
 - Telegram Bot Token: **2 minutes**
 - Telegram User ID: **1 minute**
-- Google Gemini API: **3 minutes**
+- Ollama Setup: **5-10 minutes** (one-time download)
 - Google Sheets API: **10-15 minutes** (first time)
-- **Total: ~20 minutes**
+- **Total: ~20-30 minutes**
 
 Once you've done it once, you'll never need to do it again!
 
