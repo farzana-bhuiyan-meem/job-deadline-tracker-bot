@@ -296,7 +296,7 @@ Deploy your bot to run 24/7 on free hosting platforms:
 
 | Service | Free Tier Limit | Monthly Cost |
 |---------|----------------|--------------|
-| Google Gemini API | 60 requests/min | **$0** |
+| Ollama (Local LLM) | Unlimited | **$0** |
 | Jina AI Reader | 1,000 requests/day | **$0** |
 | Google Sheets API | 500 requests/100 seconds | **$0** |
 | Telegram Bot API | Unlimited | **$0** |
@@ -346,7 +346,7 @@ For typical usage (50 jobs/month), you'll stay well within all free tier limits.
 ## 🛠️ Technical Stack
 
 - **Bot Framework:** python-telegram-bot 20.0+
-- **AI/ML:** Google Gemini API
+- **AI/ML:** Ollama (Llama 3.2) - Local LLM
 - **Web Scraping:** Jina AI Reader, BeautifulSoup4
 - **Date Parsing:** dateparser
 - **Sheets API:** google-api-python-client
@@ -359,7 +359,7 @@ For typical usage (50 jobs/month), you'll stay well within all free tier limits.
 job-deadline-tracker-bot/
 ├── bot.py                 # Main Telegram bot logic
 ├── scraper.py            # Web scraping (Jina AI + fallback)
-├── extractor.py          # AI extraction (Regex + Gemini)
+├── extractor.py          # AI extraction (Regex + Ollama)
 ├── sheets.py             # Google Sheets integration
 ├── reminder.py           # Automated reminder system
 ├── utils.py              # Helper functions
@@ -392,7 +392,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 - [Telegram Bot API](https://core.telegram.org/bots/api)
-- [Google Gemini](https://ai.google.dev/)
+- [Ollama](https://ollama.com/)
 - [Jina AI Reader](https://jina.ai/reader/)
 - [python-telegram-bot](https://python-telegram-bot.org/)
 

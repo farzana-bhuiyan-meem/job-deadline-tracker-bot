@@ -110,7 +110,7 @@ def extract_deadline_regex(text: str) -> Optional[datetime]:
 def extract_company_regex(text: str) -> Optional[str]:
     """
     Extract company name using regex patterns.
-    Fallback when Gemini extraction fails.
+    Fallback when Ollama extraction fails.
     
     Args:
         text: Job posting text
@@ -158,7 +158,7 @@ def extract_company_regex(text: str) -> Optional[str]:
 def extract_position_regex(text: str) -> Optional[str]:
     """
     Extract job position/title using regex patterns.
-    Fallback when Gemini extraction fails.
+    Fallback when Ollama extraction fails.
     
     Args:
         text: Job posting text
@@ -209,7 +209,7 @@ def extract_position_regex(text: str) -> Optional[str]:
 def extract_location_regex(text: str) -> Optional[str]:
     """
     Extract job location using regex patterns.
-    Fallback when Gemini extraction fails.
+    Fallback when Ollama extraction fails.
     
     Args:
         text: Job posting text
@@ -294,7 +294,7 @@ def extract_location_regex(text: str) -> Optional[str]:
 def extract_salary_regex(text: str) -> Optional[str]:
     """
     Extract salary information using regex patterns.
-    Fallback when Gemini extraction fails.
+    Fallback when Ollama extraction fails.
     Handles multiple Bangladesh salary formats.
     
     Args:

@@ -541,8 +541,9 @@ def main():
     if not config.GOOGLE_SHEET_ID:
         logger.warning("GOOGLE_SHEET_ID not set - sheet integration will not work")
     
-    if not config.GEMINI_API_KEY:
-        logger.warning("GEMINI_API_KEY not set - AI extraction will not work")
+    # Note: OLLAMA_AVAILABLE is checked in extractor.py
+    # Bot will fall back to regex-only extraction if Ollama is not available
+    logger.info("AI extraction will use Ollama if available, otherwise regex patterns")
     
     try:
         # Initialize Google Sheets
