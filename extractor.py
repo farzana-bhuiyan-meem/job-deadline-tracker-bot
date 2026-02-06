@@ -15,6 +15,9 @@ import config
 DEFAULT_COMPANY = 'Unknown Company'
 DEFAULT_POSITION = 'Unknown Position'
 
+# Maximum length for extracted salary text
+MAX_SALARY_TEXT_LENGTH = 150
+
 # Import Gemini API with warning suppression
 import warnings
 with warnings.catch_warnings():
@@ -268,6 +271,7 @@ def extract_salary_regex(text: str) -> Optional[str]:
     """
     Extract salary information using regex patterns.
     Fallback when Gemini extraction fails.
+    Handles multiple Bangladesh salary formats.
     
     Args:
         text: Job posting text
@@ -277,27 +281,106 @@ def extract_salary_regex(text: str) -> Optional[str]:
     """
     logger.info("Attempting to extract salary using regex patterns")
     
-    patterns = [
-        # "Salary: 50,000 BDT" or "Monthly Salary: BDT 40,000"
-        r'(?:Salary|Compensation|Monthly Salary|Package):\s*((?:BDT|Tk|৳|USD|\$)?\s*[\d,]+(?:\s*(?:BDT|Tk|৳|USD|\$))?(?:\s*[\-–to]+\s*(?:BDT|Tk|৳|USD|\$)?\s*[\d,]+(?:\s*(?:BDT|Tk|৳|USD|\$))?)?)',
-        
-        # "BDT 50,000" or "৳40,000 - ৳60,000"
-        r'((?:BDT|Tk|৳|USD|\$)\s*[\d,]+(?:\s*[\-–to]+\s*(?:BDT|Tk|৳|USD|\$)?\s*[\d,]+)?(?:\s*(?:per month|monthly|/month))?)',
-        
-        # "50,000 BDT per month"
-        r'([\d,]+\s*(?:BDT|Tk|৳|USD|\$)(?:\s*[\-–to]+\s*[\d,]+\s*(?:BDT|Tk|৳|USD|\$))?(?:\s*(?:per month|monthly|/month))?)',
+    # Pattern 1: Labeled salary with full details
+    # "Salary: Tk. 22,000 - 30,000 (Monthly)"
+    # "Monthly Salary: BDT 25,000 - 35,000 (Negotiable)"
+    labeled_patterns = [
+        r'(?:Salary|Compensation|Monthly Salary|Package|Pay):\s*([^\n]+?)(?:\n\n|\n[A-Z]|$)',
     ]
     
-    for pattern in patterns:
+    for pattern in labeled_patterns:
         match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+        if match:
+            salary = match.group(1).strip()
+            # Clean up
+            salary = re.sub(r'\s+', ' ', salary)
+            # Basic validation: contains number or "Negotiable"
+            if re.search(r'\d|negotiable', salary, re.IGNORECASE) and len(salary) < MAX_SALARY_TEXT_LENGTH:
+                logger.info(f"Regex extracted salary (labeled): {salary}")
+                return salary
+    
+    # Pattern 2: Currency symbol at start with range and suffix
+    # "Tk. 22,000 - 30,000 per month"
+    # "৳ 25,000 - 32,000"
+    # "BDT 50,000-60,000 (Monthly)"
+    # "$800-1000/month"
+    currency_first_patterns = [
+        # Range: Currency + number + (k)? + separator + number + (k)? + optional suffix
+        # Examples: "Tk. 22,000 - 30,000 per month", "৳25k-35k"
+        r'((?:Tk\.?|৳|BDT|USD|\$)\s*[\d,]+(?:k|K)?\s*(?:[-–to]+)\s*[\d,]+(?:k|K)?(?:\s*(?:BDT|Tk|৳|USD|\$))?(?:\s*(?:per month|monthly|/month|\(Monthly\)|\(Negotiable\)))?)',
+        
+        # Single amount: Currency + number + (k)? + (+)? + optional suffix
+        # Examples: "Tk 50000+", "BDT 50k per month"
+        r'((?:Tk\.?|৳|BDT|USD|\$)\s*[\d,]+(?:k|K)?(?:\+)?(?:\s*(?:per month|monthly|/month|\(Monthly\)|\(Negotiable\)))?)',
+    ]
+    
+    for pattern in currency_first_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
         if match:
             salary = match.group(1).strip()
             # Clean up whitespace
             salary = re.sub(r'\s+', ' ', salary)
-            # Sanity check: contains numbers
-            if re.search(r'\d', salary) and len(salary) < 100:
-                logger.info(f"Regex extracted salary: {salary}")
+            # Validate: reasonable length and contains digits
+            if re.search(r'\d', salary) and 3 < len(salary) < MAX_SALARY_TEXT_LENGTH:
+                logger.info(f"Regex extracted salary (currency first): {salary}")
                 return salary
+    
+    # Pattern 3: Amount first, then currency
+    # "22,000 - 30,000 BDT"
+    # "25000-35000 Tk"
+    # "30k-40k BDT/month"
+    amount_first_patterns = [
+        # Range: number + (k)? + separator + number + (k)? + currency + optional suffix
+        # Examples: "22,000 - 30,000 BDT", "30k-40k BDT/month"
+        r'([\d,]+(?:k|K)?\s*(?:[-–to]+)\s*[\d,]+(?:k|K)?\s*(?:BDT|Tk\.?|৳|USD|\$)(?:\s*(?:per month|monthly|/month|\(Monthly\)|\(Negotiable\)))?)',
+        
+        # Single amount: number + (k)? + (+)? + currency + optional suffix
+        # Examples: "50000+ BDT", "50k Tk per month"
+        r'([\d,]+(?:k|K)?(?:\+)?\s*(?:BDT|Tk\.?|৳|USD|\$)(?:\s*(?:per month|monthly|/month|\(Monthly\)|\(Negotiable\)))?)',
+    ]
+    
+    for pattern in amount_first_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            salary = match.group(1).strip()
+            salary = re.sub(r'\s+', ' ', salary)
+            # Additional validation: must have reasonable digits
+            if re.search(r'\d{2,}', salary) and 3 < len(salary) < MAX_SALARY_TEXT_LENGTH:
+                logger.info(f"Regex extracted salary (amount first): {salary}")
+                return salary
+    
+    # Pattern 4: Just numbers in salary context (no currency symbol)
+    # "22,000 - 30,000 (Monthly)"
+    # "30000-40000"
+    # Only match if near "Salary" keyword to avoid false positives
+    contextual_pattern = r'(?:Salary|Compensation|Pay)(?:[:\s]+).*?([\d,]+\s*(?:[-–to]+)\s*[\d,]+(?:\s*\((?:Monthly|Negotiable|Per Month)\))?)'
+    match = re.search(contextual_pattern, text, re.IGNORECASE | re.DOTALL)
+    if match:
+        # Make sure we don't capture too much text
+        potential_salary = match.group(1).strip()
+        # Check if captured text is reasonably sized
+        if len(potential_salary) < 100:
+            salary = potential_salary
+            salary = re.sub(r'\s+', ' ', salary)
+            logger.info(f"Regex extracted salary (contextual): {salary}")
+            return salary
+    
+    # Pattern 5: "Negotiable" or "As per company policy"
+    negotiable_match = re.search(r'(?:Salary|Compensation)[:\s]+(Negotiable|As per company policy|Competitive)', text, re.IGNORECASE)
+    if negotiable_match:
+        logger.info(f"Regex extracted salary (negotiable): {negotiable_match.group(1)}")
+        return negotiable_match.group(1)
+    
+    # Pattern 6: Standalone amount ranges (last resort, be conservative)
+    # Only match clear salary-like numbers (4-6 digits with separator or k suffix)
+    standalone_pattern = r'\b((?:\d{2,3}[,]\d{3}|\d{2,3}k)\s*[-–to]+\s*(?:\d{2,3}[,]\d{3}|\d{2,3}k))\b'
+    match = re.search(standalone_pattern, text, re.IGNORECASE)
+    if match:
+        salary = match.group(1).strip()
+        # Only accept if it looks like a salary (20k-50k range or 20,000-50,000)
+        salary = re.sub(r'\s+', ' ', salary)
+        logger.info(f"Regex extracted salary (standalone): {salary}")
+        return salary
     
     logger.info("No salary found using regex patterns")
     return None
