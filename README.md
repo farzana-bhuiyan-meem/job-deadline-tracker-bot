@@ -13,7 +13,7 @@
 - 🧠 **AI-Powered Extraction** - Automatically extracts company, position, deadline, salary, location
 - 📊 **Google Sheets Integration** - All jobs saved with color-coded urgency
 - ⏰ **Smart Reminders** - Notifications at 3 days, 1 day, and morning of deadline
-- 💰 **100% Free** - Uses only free-tier APIs (Gemini, Jina AI, Google Sheets)
+- 💰 **100% Free** - Uses only free tools (Ollama local LLM, Jina AI, Google Sheets)
 - 📱 **Mobile Ready** - Works perfectly on Telegram mobile app
 - 🌍 **Bangladesh Optimized** - Supports Bengali text and Bangladesh timezone
 
@@ -50,15 +50,29 @@ cd job-deadline-tracker-bot
 pip install -r requirements.txt
 ```
 
-### 3️⃣ Setup API Keys
+### 3️⃣ Install Ollama (Local AI)
 
-You'll need to get three API keys (all free):
+Install Ollama for local AI-powered extraction:
+
+1. Download from [https://ollama.com/download](https://ollama.com/download)
+2. Install Ollama on your system
+3. Pull the Llama 3.2 model:
+   ```bash
+   ollama pull llama3.2
+   ```
+4. Verify it's working:
+   ```bash
+   ollama run llama3.2 "Hello"
+   ```
+
+### 4️⃣ Setup API Keys
+
+You'll need to get two API keys (all free):
 
 1. **Telegram Bot Token** - See [API Setup Guide](docs/API_SETUP.md)
-2. **Google Gemini API Key** - See [API Setup Guide](docs/API_SETUP.md)
-3. **Google Sheets Credentials** - See [API Setup Guide](docs/API_SETUP.md)
+2. **Google Sheets Credentials** - See [API Setup Guide](docs/API_SETUP.md)
 
-### 4️⃣ Configure Environment
+### 5️⃣ Configure Environment
 
 ```bash
 cp .env.example .env
@@ -69,13 +83,12 @@ Edit `.env` with your API keys:
 ```env
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 TELEGRAM_USER_ID=your_telegram_user_id
-GEMINI_API_KEY=your_gemini_api_key
 GOOGLE_SHEETS_CREDENTIALS=credentials.json
 GOOGLE_SHEET_ID=your_google_sheet_id
 USER_TIMEZONE=Asia/Dhaka
 ```
 
-### 5️⃣ Run the Bot
+### 6️⃣ Run the Bot
 
 ```bash
 python bot.py
@@ -91,12 +104,23 @@ python bot.py
 4. Copy the **Bot Token** you receive
 5. Get your **User ID** by messaging [@userinfobot](https://t.me/userinfobot)
 
-### Step 2: Get Google Gemini API Key
+### Step 2: Install Ollama (Local AI)
 
-1. Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
-2. Click "Create API Key"
-3. Copy the generated key
-4. **Cost:** Free tier includes 60 requests per minute
+1. Visit [Ollama Downloads](https://ollama.com/download)
+2. Download and install Ollama for your operating system
+3. Open terminal/command prompt and run:
+   ```bash
+   ollama pull llama3.2
+   ```
+4. Test that it works:
+   ```bash
+   ollama run llama3.2 "Hello"
+   ```
+5. **Benefits:** 
+   - ✅ No API key needed
+   - ✅ 100% private - all data stays on your PC
+   - ✅ Works offline
+   - ✅ No rate limits or costs
 
 ### Step 3: Setup Google Sheets API
 

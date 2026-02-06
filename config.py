@@ -13,9 +13,9 @@ load_dotenv()
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_USER_ID = os.getenv('TELEGRAM_USER_ID')
 
-# Google Gemini API
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-GEMINI_MODEL = 'gemini-1.5-flash'
+# Ollama Configuration (Local LLM)
+OLLAMA_MODEL = 'llama3.2'  # Model to use for extraction
+OLLAMA_HOST = 'http://localhost:11434'  # Default Ollama server
 
 # Jina AI Reader
 JINA_API_KEY = os.getenv('JINA_API_KEY', '')

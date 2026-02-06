@@ -1,5 +1,5 @@
 """
-Job detail extraction using regex patterns and Google Gemini API.
+Job detail extraction using regex patterns and Ollama (local LLM).
 """
 
 import logging
@@ -18,23 +18,15 @@ DEFAULT_POSITION = 'Unknown Position'
 # Maximum length for extracted salary text
 MAX_SALARY_TEXT_LENGTH = 150
 
-# Import Gemini API with warning suppression
-import warnings
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", category=FutureWarning)
-    try:
-        import google.generativeai as genai
-    except ImportError:
-        genai = None
-
+# Import Ollama for local LLM extraction
 logger = logging.getLogger(__name__)
 
-# Configure Gemini API
-if genai and config.GEMINI_API_KEY:
-    try:
-        genai.configure(api_key=config.GEMINI_API_KEY)
-    except Exception as e:
-        logger.warning(f"Failed to configure Gemini API: {e}")
+try:
+    import ollama
+    OLLAMA_AVAILABLE = True
+except ImportError:
+    OLLAMA_AVAILABLE = False
+    logger.warning("Ollama not installed. Run: pip install ollama")
 
 
 def extract_deadline_regex(text: str) -> Optional[datetime]:
@@ -418,8 +410,8 @@ def extract_salary_regex(text: str) -> Optional[str]:
     return None
 
 
-def _extract_company(model, text: str) -> str:
-    """Extract company name using focused prompt."""
+def _extract_company(text: str) -> str:
+    """Extract company name using Ollama."""
     prompt = f"""
 Look at this job posting and extract ONLY the company name.
 
@@ -441,8 +433,15 @@ Examples:
 Company name:"""
     
     try:
-        response = model.generate_content(prompt)
-        result = response.text.strip()
+        response = ollama.generate(
+            model=config.OLLAMA_MODEL,
+            prompt=prompt,
+            options={
+                'temperature': 0.1,  # Low temperature for factual extraction
+                'num_predict': 50,   # Limit response length
+            }
+        )
+        result = response['response'].strip()
         
         # Clean up response
         if result.lower() == 'null' or not result or len(result) > 100:
@@ -456,8 +455,8 @@ Company name:"""
         return None
 
 
-def _extract_position(model, text: str) -> str:
-    """Extract job position using focused prompt."""
+def _extract_position(text: str) -> str:
+    """Extract job position using Ollama."""
     prompt = f"""
 Look at this job posting and extract ONLY the job title/position.
 
@@ -478,10 +477,16 @@ Examples:
 Job title:"""
     
     try:
-        response = model.generate_content(prompt)
-        result = response.text.strip()
+        response = ollama.generate(
+            model=config.OLLAMA_MODEL,
+            prompt=prompt,
+            options={
+                'temperature': 0.1,
+                'num_predict': 50,
+            }
+        )
+        result = response['response'].strip()
         
-        # Clean up response
         if result.lower() == 'null' or not result or len(result) > 150:
             logger.info("Position extraction returned null or invalid")
             return None
@@ -493,8 +498,8 @@ Job title:"""
         return None
 
 
-def _extract_location(model, text: str) -> str:
-    """Extract location using focused prompt."""
+def _extract_location(text: str) -> str:
+    """Extract location using Ollama."""
     prompt = f"""
 Look at this job posting and extract ONLY the work location.
 
@@ -505,6 +510,7 @@ Instructions:
 - Look for "Location:", "Office:", "Workplace:", "Job Location:", "Work from"
 - Look for city names like Dhaka, Chittagong, Sylhet, Khulna, etc.
 - Look for area names like Gulshan, Banani, Dhanmondi, Niketon, etc.
+- Include full address if provided (House #, Road #, Block, postal code)
 - Include "Remote" or "Work from home" if mentioned
 - Return ONLY the location, nothing else
 - If you cannot find it, return the word "null"
@@ -513,15 +519,22 @@ Examples:
 - "Location: Dhaka, Bangladesh" → Dhaka, Bangladesh
 - "Office: Gulshan 2, Dhaka" → Gulshan 2, Dhaka
 - "Remote work" → Remote
+- "Location: Police Park, House #05, Road #10, Block D, Dhaka 1219" → Police Park, House #05, Road #10, Block D, Dhaka 1219
 
 Location:"""
     
     try:
-        response = model.generate_content(prompt)
-        result = response.text.strip()
+        response = ollama.generate(
+            model=config.OLLAMA_MODEL,
+            prompt=prompt,
+            options={
+                'temperature': 0.1,
+                'num_predict': 100,
+            }
+        )
+        result = response['response'].strip()
         
-        # Clean up response
-        if result.lower() == 'null' or not result or len(result) > 100:
+        if result.lower() == 'null' or not result or len(result) > 200:
             logger.info("Location extraction returned null or invalid")
             return None
         
@@ -532,8 +545,8 @@ Location:"""
         return None
 
 
-def _extract_salary(model, text: str) -> str:
-    """Extract salary using focused prompt."""
+def _extract_salary(text: str) -> str:
+    """Extract salary using Ollama."""
     prompt = f"""
 Look at this job posting and extract ONLY the salary information.
 
@@ -542,9 +555,10 @@ Job Posting:
 
 Instructions:
 - Look for "Salary:", "Compensation:", "Pay:", "Monthly Salary:", "Package:"
-- Look for currency symbols: BDT, USD, $, ৳, Tk
+- Look for currency symbols: BDT, USD, $, ৳, Tk, Tk.
 - Look for numbers followed by these keywords
 - Include the full salary range if given
+- Include suffixes like (Monthly), (Negotiable), per month, etc.
 - Return ONLY the salary info, nothing else
 - If you cannot find it, return the word "null"
 
@@ -552,14 +566,22 @@ Examples:
 - "Salary: 50,000 BDT per month" → 50,000 BDT per month
 - "Monthly: ৳40,000 - ৳60,000" → ৳40,000 - ৳60,000
 - "Compensation: $800/month" → $800/month
+- "Tk. 22,000 - 30,000 (Monthly)" → Tk. 22,000 - 30,000 (Monthly)
+- "Salary: Negotiable" → Negotiable
 
 Salary:"""
     
     try:
-        response = model.generate_content(prompt)
-        result = response.text.strip()
+        response = ollama.generate(
+            model=config.OLLAMA_MODEL,
+            prompt=prompt,
+            options={
+                'temperature': 0.1,
+                'num_predict': 50,
+            }
+        )
+        result = response['response'].strip()
         
-        # Clean up response
         if result.lower() == 'null' or not result or len(result) > 100:
             logger.info("Salary extraction returned null or invalid")
             return None
@@ -571,8 +593,8 @@ Salary:"""
         return None
 
 
-def _extract_deadline(model, text: str) -> str:
-    """Extract deadline using focused prompt."""
+def _extract_deadline(text: str) -> str:
+    """Extract deadline using Ollama."""
     prompt = f"""
 Look at this job posting and extract ONLY the application deadline date.
 
@@ -592,10 +614,16 @@ Examples:
 Deadline (YYYY-MM-DD):"""
     
     try:
-        response = model.generate_content(prompt)
-        result = response.text.strip()
+        response = ollama.generate(
+            model=config.OLLAMA_MODEL,
+            prompt=prompt,
+            options={
+                'temperature': 0.1,
+                'num_predict': 30,
+            }
+        )
+        result = response['response'].strip()
         
-        # Clean up response
         if result.lower() == 'null' or not result or len(result) > 50:
             logger.info("Deadline extraction returned null or invalid")
             return None
@@ -607,8 +635,8 @@ Deadline (YYYY-MM-DD):"""
         return None
 
 
-def _extract_description(model, text: str) -> str:
-    """Extract brief job description."""
+def _extract_description(text: str) -> str:
+    """Extract brief job description using Ollama."""
     prompt = f"""
 Look at this job posting and write a ONE sentence summary (max 200 characters).
 
@@ -624,10 +652,16 @@ Instructions:
 Summary:"""
     
     try:
-        response = model.generate_content(prompt)
-        result = response.text.strip()
+        response = ollama.generate(
+            model=config.OLLAMA_MODEL,
+            prompt=prompt,
+            options={
+                'temperature': 0.3,
+                'num_predict': 100,
+            }
+        )
+        result = response['response'].strip()
         
-        # Clean up response
         if result.lower() == 'null' or not result or len(result) > 250:
             logger.info("Description extraction returned null or invalid")
             return None
@@ -643,10 +677,9 @@ Summary:"""
         return None
 
 
-def extract_job_details_gemini(text: str, url: str = None) -> Dict:
+def _extract_with_regex_only(text: str, url: str = None) -> Dict:
     """
-    Use Gemini API to extract job details using multi-pass strategy.
-    Falls back to regex patterns if Gemini extraction fails.
+    Extract job details using only regex patterns (fallback when Ollama unavailable).
     
     Args:
         text: Job posting text
@@ -655,64 +688,91 @@ def extract_job_details_gemini(text: str, url: str = None) -> Dict:
     Returns:
         Dictionary with extracted fields
     """
-    logger.info("Using Gemini API to extract job details")
+    logger.info("Using regex-only extraction")
     
-    # Limit text length
     text_sample = text[:5000] if len(text) > 5000 else text
     
-    # Initialize result dict
     job_data = {
-        'company': None,
-        'position': None,
+        'company': extract_company_regex(text_sample),
+        'position': extract_position_regex(text_sample),
+        'location': extract_location_regex(text_sample),
+        'salary': extract_salary_regex(text_sample),
         'deadline': None,
-        'salary': None,
-        'location': None,
         'description': None,
         'url': url
     }
     
-    if not config.GEMINI_API_KEY or not genai:
-        logger.warning("Gemini API not configured or not available, using regex-only extraction")
-        # Try regex extraction for all fields
-        job_data['company'] = extract_company_regex(text_sample)
-        job_data['position'] = extract_position_regex(text_sample)
-        job_data['location'] = extract_location_regex(text_sample)
-        job_data['salary'] = extract_salary_regex(text_sample)
-        # Deadline will be handled by extract_job_details() function
-        # Description has no regex fallback
-        return job_data
+    return job_data
+
+
+def extract_job_details_ollama(text: str, url: str = None) -> Dict:
+    """
+    Use Ollama (Llama 3.2) to extract job details using multi-pass strategy.
+    Falls back to regex patterns if Ollama extraction fails.
+    
+    Args:
+        text: Job posting text
+        url: Job posting URL (optional)
+        
+    Returns:
+        Dictionary with extracted fields
+    """
+    logger.info("Using Ollama (Llama 3.2) to extract job details")
+    
+    if not OLLAMA_AVAILABLE:
+        logger.error("Ollama not available, using regex only")
+        return _extract_with_regex_only(text, url)
     
     try:
-        # Initialize Gemini model
-        model = genai.GenerativeModel(config.GEMINI_MODEL)
-        logger.info(f"Initializing Gemini model: {config.GEMINI_MODEL}")
+        # Test Ollama connection
+        ollama.list()
+        logger.info(f"Ollama connected, using model: {config.OLLAMA_MODEL}")
+    except Exception as e:
+        logger.error(f"Ollama not running or not accessible: {e}")
+        logger.error("Make sure Ollama is running. Start it with: ollama serve")
+        return _extract_with_regex_only(text, url)
+    
+    try:
+        # Limit text length
+        text_sample = text[:5000] if len(text) > 5000 else text
+        
+        # Initialize result dict
+        job_data = {
+            'company': None,
+            'position': None,
+            'deadline': None,
+            'salary': None,
+            'location': None,
+            'description': None,
+            'url': url
+        }
         
         # PASS 1: Extract company name
-        job_data['company'] = _extract_company(model, text_sample)
-        # Fallback to regex if Gemini failed
+        job_data['company'] = _extract_company(text_sample)
+        # Fallback to regex if Ollama failed
         if not job_data['company']:
             job_data['company'] = extract_company_regex(text_sample)
         
         # PASS 2: Extract position
-        job_data['position'] = _extract_position(model, text_sample)
-        # Fallback to regex if Gemini failed
+        job_data['position'] = _extract_position(text_sample)
+        # Fallback to regex if Ollama failed
         if not job_data['position']:
             job_data['position'] = extract_position_regex(text_sample)
         
         # PASS 3: Extract location
-        job_data['location'] = _extract_location(model, text_sample)
-        # Fallback to regex if Gemini failed
+        job_data['location'] = _extract_location(text_sample)
+        # Fallback to regex if Ollama failed
         if not job_data['location']:
             job_data['location'] = extract_location_regex(text_sample)
         
         # PASS 4: Extract salary
-        job_data['salary'] = _extract_salary(model, text_sample)
-        # Fallback to regex if Gemini failed
+        job_data['salary'] = _extract_salary(text_sample)
+        # Fallback to regex if Ollama failed
         if not job_data['salary']:
             job_data['salary'] = extract_salary_regex(text_sample)
         
-        # PASS 5: Extract deadline (if not already found by regex)
-        deadline_str = _extract_deadline(model, text_sample)
+        # PASS 5: Extract deadline
+        deadline_str = _extract_deadline(text_sample)
         if deadline_str:
             try:
                 deadline = dateparser.parse(
@@ -727,22 +787,16 @@ def extract_job_details_gemini(text: str, url: str = None) -> Dict:
             except Exception:
                 job_data['deadline'] = None
         
-        # PASS 6: Extract description (Gemini only, no regex fallback makes sense here)
-        job_data['description'] = _extract_description(model, text_sample)
+        # PASS 6: Extract description
+        job_data['description'] = _extract_description(text_sample)
         
         logger.info(f"Extraction complete: {job_data}")
         return job_data
         
     except Exception as e:
-        logger.error(f"Gemini API extraction failed: {str(e)}")
+        logger.error(f"Ollama extraction failed: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
-        # Fall back to regex-only extraction
-        logger.info("Falling back to regex-only extraction due to Gemini failure")
-        job_data['company'] = extract_company_regex(text_sample)
-        job_data['position'] = extract_position_regex(text_sample)
-        job_data['location'] = extract_location_regex(text_sample)
-        job_data['salary'] = extract_salary_regex(text_sample)
-        return job_data
+        return _extract_with_regex_only(text, url)
 
 
 def extract_job_details(text: str, url: str = None) -> Dict:
@@ -750,7 +804,8 @@ def extract_job_details(text: str, url: str = None) -> Dict:
     Complete job extraction pipeline.
     
     1. Try regex for deadline
-    2. Use Gemini for all details (including deadline if regex failed)
+    2. Use Ollama for all details (including deadline if regex failed)
+    3. Fall back to regex for each field if Ollama fails
     
     Args:
         text: Job posting text content
@@ -764,10 +819,10 @@ def extract_job_details(text: str, url: str = None) -> Dict:
     # Step 1: Try regex for deadline
     deadline = extract_deadline_regex(text)
     
-    # Step 2: Use Gemini for other details
-    job_data = extract_job_details_gemini(text, url)
+    # Step 2: Use Ollama for other details
+    job_data = extract_job_details_ollama(text, url)
     
-    # Use regex deadline if found and Gemini didn't find one
+    # Use regex deadline if found and Ollama didn't find one
     if deadline and not job_data.get('deadline'):
         job_data['deadline'] = deadline
         logger.info("Using regex-extracted deadline")

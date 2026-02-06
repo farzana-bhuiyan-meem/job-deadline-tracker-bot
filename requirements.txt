@@ -7,7 +7,7 @@ google-auth-oauthlib
 google-auth-httplib2
 
 # AI and NLP
-google-generativeai
+ollama>=0.1.0
 dateparser
 
 # Web Scraping
